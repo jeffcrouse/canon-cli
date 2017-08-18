@@ -8,9 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		1FB0BD1E1F4730E7009387AC /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FB0BD1D1F4730E7009387AC /* main.cpp */; };
-		1FB0BD271F473270009387AC /* DPP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB0BD261F473270009387AC /* DPP.framework */; };
-		1FB0BD291F473272009387AC /* EDSDK.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB0BD281F473272009387AC /* EDSDK.framework */; };
 		1FB0BD341F474A8B009387AC /* EdsStrings.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FB0BD321F474A8B009387AC /* EdsStrings.cpp */; };
+		1FB0BD351F4782F3009387AC /* EDSDK.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB0BD281F473272009387AC /* EDSDK.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -41,8 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1FB0BD271F473270009387AC /* DPP.framework in Frameworks */,
-				1FB0BD291F473272009387AC /* EDSDK.framework in Frameworks */,
+				1FB0BD351F4782F3009387AC /* EDSDK.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -287,6 +285,7 @@
 				1FB0BD231F4730E7009387AC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

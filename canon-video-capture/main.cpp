@@ -12,12 +12,16 @@
 // - Connect to camera based on BodyID?
 // - Do we need to transfer, save, and delete file if we are saving to host?
 //
+//
+
 
 
 #define __MACOS__
 #define ERROR_PREFIX "[erorr] "
 #define STATUS_PREFIX "[status] "
-#define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { std::cerr << ERROR_PREFIX << Eds::getErrorString(X) << std::endl;  exit(1); } \
+#define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { std::cerr << ERROR_PREFIX << Eds::getErrorString(X) << std::endl;  exit(1); }
+#define EDSDK_MOV_FORMAT 45317
+
 
 #include <unistd.h>
 #import <iostream>
@@ -65,18 +69,19 @@ std::string make_default_filename() {
     return ss.str();
 }
 
-void signal_handler( int signum ) {
-    std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
-    sigint_received = true;
-}
-
-void terminate_early() {
+void terminate_early(std::string msg) {
+    std::cerr << ERROR_PREFIX << msg << std::endl;
     EDSDK_CHECK( EdsTerminateSDK() )
     exit(1);
 }
 
 int main(int argc, char * argv[]) {
-    signal(SIGINT, signal_handler);
+    
+    // Set the signal handler so we can tell when to stop recording
+    signal(SIGINT, [](int signum) {
+        std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
+        sigint_received = true;
+    });
     
     
     //
@@ -88,11 +93,12 @@ int main(int argc, char * argv[]) {
             ("d,debug", "Enable debugging", cxxopts::value<bool>(debug))
             ("i,id", "Camera ID", cxxopts::value<int>(), "0")
             ("o,outfile", "Out file", cxxopts::value<std::string>()->default_value(make_default_filename()))
-            ("s,save-to", "Save to", cxxopts::value<std::string>()->default_value("device"))
+            ("s,save-to-host", "Save to Host", cxxopts::value<bool>(saveToHost))
             ("l,list-devices", "List Devices", cxxopts::value<bool>(listDevices))
             ;
         
         options.parse(argc, argv);
+        
         
         camera_id = options["id"].as<int>();
         outfile = options["outfile"].as<std::string>();
@@ -130,8 +136,7 @@ int main(int argc, char * argv[]) {
     EDSDK_CHECK( EdsGetChildCount(cameraList, &cameraCount) );
     
     if(cameraCount==0) {
-        std::cerr << ERROR_PREFIX << "No cameras attached." << std::endl;
-        terminate_early();
+        terminate_early("No cameras attached.");
     }
     
     
@@ -193,7 +198,7 @@ int main(int argc, char * argv[]) {
         
         std::cout << ss.str();
         
-        terminate_early();
+        terminate_early("");
     }
     
     
@@ -237,8 +242,7 @@ int main(int argc, char * argv[]) {
         }
 
         if(event == kEdsStateEvent_Shutdown) {
-            print_status("kEdsStateEvent_Shutdown received. Exiting.");
-            terminate_early();
+            terminate_early("kEdsStateEvent_Shutdown received. Exiting.");
         }
         
         return EDS_ERR_OK;
@@ -277,12 +281,16 @@ int main(int argc, char * argv[]) {
     
     
     
+    
+    
     //
     //  Start recording
     //
     print_status("start recording");
     EdsUInt32 record_start = 4; // Begin movie shooting
     EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
+    
+    
     
     
     
@@ -301,6 +309,8 @@ int main(int argc, char * argv[]) {
         }
     }
     std::cout  << std::endl;
+    
+    
     
     
     
@@ -339,15 +349,23 @@ int main(int argc, char * argv[]) {
     EdsStreamRef stream = NULL;
     EdsDirectoryItemInfo dirItemInfo;
     EDSDK_CHECK( EdsGetDirectoryItemInfo(directoryItem, &dirItemInfo) )
+
+    if (dirItemInfo.format != EDSDK_MOV_FORMAT) {
+        terminate_early("file format is not the video format");
+    }
+
+    
     
     
     //
     // Download the video to the EdsStreamRef
     //
-    print_status("download video");
+    print_status("downloading video");
     EDSDK_CHECK( EdsCreateMemoryStream(0, &stream) )
     EDSDK_CHECK( EdsDownload(directoryItem, dirItemInfo.size, stream) )
     EDSDK_CHECK( EdsDownloadComplete(directoryItem) )
+    
+    
     
     
     
@@ -363,6 +381,10 @@ int main(int argc, char * argv[]) {
 
     
     
+    
+    
+    
+    
 
     //
     //  Save buffer to disk!
@@ -372,15 +394,21 @@ int main(int argc, char * argv[]) {
     fout.write((char*)&streamPointer[0], length);
     fout.close();
     if(fout.bad()) {
-        std::cout << "File is bad. Exiting" << std::endl;
-        terminate_early();
+        std::cerr << "WARNING: File has bad byte" << std::endl;
     }
+    
+    
+    
     
     
     //
     //  Release the Stream!
     //
+    print_status("releasing data stream");
     EDSDK_CHECK( EdsRelease(stream) )
+    
+    
+    
     
     
     
@@ -388,9 +416,11 @@ int main(int argc, char * argv[]) {
     //  Delete file after download
     //
     if(deleteAfterDownload) {
-        print_status("deleting file");
+        print_status("deleting file from device");
         EDSDK_CHECK( EdsDeleteDirectoryItem(directoryItem) )
     }
+    
+    
     
     
     
@@ -401,6 +431,7 @@ int main(int argc, char * argv[]) {
     print_status("terminating SDK");
     EDSDK_CHECK( EdsTerminateSDK() )
 
+    
     
     print_status("done!");
     return 0;
