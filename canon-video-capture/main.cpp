@@ -19,12 +19,12 @@
 
 
 #define __MACOS__
-#define ERROR_PREFIX "[erorr] "
+#define ERROR_PREFIX "[error] "
 #define STATUS_PREFIX "[status] "
 #define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { std::cerr << ERROR_PREFIX << Eds::getErrorString(X) << std::endl;  exit(1); }
 #define EDSDK_MOV_FORMAT 45317
 
-
+#include <thread>
 #include <unistd.h>
 #import <iostream>
 #include <fstream>
@@ -53,6 +53,7 @@ unsigned int microseconds = 100;
 long dirItemTimeout = 10000;
 
 
+
 EdsCameraRef camera;
 EdsError err;
 EdsDirectoryItemRef directoryItem = NULL;
@@ -76,13 +77,67 @@ void terminate_early(std::string msg) {
     exit(1);
 }
 
+EdsError EDSCALLBACK handleObjectEvent(EdsObjectEvent event, EdsBaseRef object, EdsVoid* context) {
+    std::cout << "[object event] " << Eds::getObjectEventString(event) << std::endl;
+    if(!object) return EDS_ERR_OK;
+    
+    if(event == kEdsObjectEvent_DirItemCreated) {
+        directoryItem = object;
+    } else if(event == kEdsObjectEvent_DirItemRemoved) {
+        // no need to release a removed item
+    } else {
+        EDSDK_CHECK( EdsRelease(object) )
+    }
+    return EDS_ERR_OK;
+}
+
+EdsError EDSCALLBACK handlePropertyEvent(EdsPropertyEvent event, EdsPropertyID propertyId, EdsUInt32 param, EdsVoid* context) {
+    if(debug)
+        std::cout << "[property event] " << Eds::getPropertyEventString(event) << ": " << Eds::getPropertyIDString(propertyId) << " / " << param << std::endl;
+    return EDS_ERR_OK;
+}
+
+EdsError EDSCALLBACK handleCameraStateEvent(EdsStateEvent event, EdsUInt32 param, EdsVoid* context) {
+    std::cout << "[state event] " << Eds::getStateEventString(event) << ": " << param << std::endl;
+    
+    if(event == kEdsStateEvent_WillSoonShutDown) {
+        sendKeepAlive = true;
+    }
+    
+    if(event == kEdsStateEvent_Shutdown) {
+        terminate_early("kEdsStateEvent_Shutdown received. Exiting.");
+    }
+    
+    return EDS_ERR_OK;
+}
+
+
+bool eventPump = true;
+void camera_thread()
+{
+    while(eventPump)
+    {
+        //print_status("EdsGetEvent");
+        EDSDK_CHECK( EdsGetEvent() )
+        std::this_thread::sleep_for (std::chrono::milliseconds(100));
+        
+    }
+}
+
+
+
+
+
 int main(int argc, char * argv[]) {
     
     // Set the signal handler so we can tell when to stop recording
     signal(SIGINT, [](int signum) {
         std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
-        sigint_received = true;
+        if(sigint_received) exit(1);
+        else sigint_received = true;
     });
+    
+    
     
     
     //
@@ -115,14 +170,13 @@ int main(int argc, char * argv[]) {
         exit(1);
     }
     
-
-    
     //
     // Initialize SDK
     //
     print_status("initializing SDK");
     EDSDK_CHECK( EdsInitializeSDK() );
-
+    
+    
     
     
     
@@ -155,32 +209,26 @@ int main(int argc, char * argv[]) {
     
     for(EdsInt32 i=0; i<cameraCount; ++i)
     {
-        //EdsDevice device;
-        //device.id = i;
         
         EdsCameraRef _camera;
         EdsDeviceInfo _info;
         
         EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &_camera) )
         EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
-
+        
         
         ss << std::setw(10) << i;
         ss << std::setw(25) << _info.szDeviceDescription;
         ss << std::setw(6) << _info.szPortName;
         ss << std::setw(11) << _info.reserved;
-
+        
         
         EDSDK_CHECK ( EdsRelease(_camera) )
     }
     std::cout << ss.str() << std::endl;
-   
+    
     
 
-    
-
-    
-    
     
     
     //
@@ -192,50 +240,25 @@ int main(int argc, char * argv[]) {
     
     
     
-
     
- 
+    
+    
+    
+    
     //
     //  Assign callbacks
     //
-    err = EdsSetObjectEventHandler(camera, kEdsObjectEvent_All, [](EdsObjectEvent event, EdsBaseRef object, EdsVoid* context) -> EdsError EDSCALLBACK {
-        std::cout << "[object event] " << Eds::getObjectEventString(event) << std::endl;
-        if(!object) return EDS_ERR_OK;
-        
-        if(event == kEdsObjectEvent_DirItemCreated) {
-            directoryItem = object;
-        } else if(event == kEdsObjectEvent_DirItemRemoved) {
-            // no need to release a removed item
-        } else {
-            EDSDK_CHECK( EdsRelease(object) )
-        }
-        return EDS_ERR_OK;
-        
-    }, NULL);
+    err = EdsSetObjectEventHandler(camera, kEdsObjectEvent_All, handleObjectEvent, NULL);
+    EDSDK_CHECK(err)
+    err = EdsSetPropertyEventHandler(camera, kEdsPropertyEvent_All, handlePropertyEvent, NULL);
+    EDSDK_CHECK(err)
+    err = EdsSetCameraStateEventHandler(camera, kEdsStateEvent_All, handleCameraStateEvent, NULL);
     EDSDK_CHECK(err)
     
-    err = EdsSetPropertyEventHandler(camera, kEdsPropertyEvent_All, [](EdsPropertyEvent event, EdsPropertyID propertyId, EdsUInt32 param, EdsVoid* context) -> EdsError EDSCALLBACK {
-        if(debug) std::cout << "[property event] " << Eds::getPropertyEventString(event) << ": " << Eds::getPropertyIDString(propertyId) << " / " << param << std::endl;
-        return EDS_ERR_OK;
-    }, NULL);
-    EDSDK_CHECK(err)
     
-    err = EdsSetCameraStateEventHandler(camera, kEdsStateEvent_All, [](EdsStateEvent event, EdsUInt32 param, EdsVoid* context) -> EdsError EDSCALLBACK {
-        std::cout << "[state event] " << Eds::getStateEventString(event) << ": " << param << std::endl;
-        
-        if(event == kEdsStateEvent_WillSoonShutDown) {
-            sendKeepAlive = true;
-        }
+    
 
-        if(event == kEdsStateEvent_Shutdown) {
-            terminate_early("kEdsStateEvent_Shutdown received. Exiting.");
-        }
-        
-        return EDS_ERR_OK;
-    }, NULL);
-    EDSDK_CHECK(err)
-
-    
+    std::thread t(camera_thread);
     
     
     
@@ -247,17 +270,8 @@ int main(int argc, char * argv[]) {
     EDSDK_CHECK( EdsOpenSession(camera) )
     
     
-
     
     
-    
-    //
-    //  We've listed and assigned callbacks, so we don't need this list any more.
-    //
-    EDSDK_CHECK( EdsRelease(cameraList) )
-
-    
-
     
     
     //
@@ -269,8 +283,6 @@ int main(int argc, char * argv[]) {
     char buf[dataSize];
     EDSDK_CHECK( EdsGetPropertyData(camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
     std::cout << STATUS_PREFIX << "connected to " << std::string(buf) << std::endl;
-
-
     
     
     
@@ -278,26 +290,22 @@ int main(int argc, char * argv[]) {
     //
     //  Set the save-to location
     //
-//    if(saveToHost) {
-//        print_status("setting kEdsSaveTo_Host");
-//        EdsUInt32 saveTo = kEdsSaveTo_Host;
-//        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
-//
-//        EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
-//        capacity.reset = 1;
-//        capacity.bytesPerSector = 512*8;
-//        capacity.numberOfFreeClusters = 36864*9999;
-//        EDSDK_CHECK( EdsSetCapacity(camera, capacity) )
-//    } else {
+    //    if(saveToHost) {
+    //        print_status("setting kEdsSaveTo_Host");
+    //        EdsUInt32 saveTo = kEdsSaveTo_Host;
+    //        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
+    //
+    //        EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
+    //        capacity.reset = 1;
+    //        capacity.bytesPerSector = 512*8;
+    //        capacity.numberOfFreeClusters = 36864*9999;
+    //        EDSDK_CHECK( EdsSetCapacity(camera, capacity) )
+    //    } else {
     
-        print_status("setting kEdsSaveTo_Camera");
-        EdsUInt32 saveTo = kEdsSaveTo_Camera;
-        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo), &saveTo) )
+    print_status("setting kEdsSaveTo_Camera");
+    EdsUInt32 saveTo = kEdsSaveTo_Camera;
+    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo), &saveTo) )
     //}
-
- 
-    
-    
     
     
     
@@ -309,33 +317,22 @@ int main(int argc, char * argv[]) {
     EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
     
     
-    
-    
-    
-    
-    
-    
     //
     //  Wait for SIGINT to stop recording
     //  TODO: Implement a maximum record time
     //
     print_status("recording");
     
-
+    
     while(sigint_received==false)
     {
-        usleep(microseconds);
-        
         if(sendKeepAlive) {
             EDSDK_CHECK( EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0) )
             sendKeepAlive = false;
         }
+        
+        usleep(microseconds);
     }
-    std::cout  << std::endl;
-    
-    
-    
-    
     
     
     
@@ -343,12 +340,9 @@ int main(int argc, char * argv[]) {
     //  Stop recording!
     //
     print_status("stopping");
-    directoryItem = NULL;               // Sometimes there are leftover diritems in the camera. This is to make sure we get the right one when we are done downloading.
+    directoryItem = NULL;               // This is to make sure we get the right dirItem when we are done downloading.
     EdsUInt32 record_stop = 0; // End movie shooting
     EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
-    
-    
-    
     
     
     
@@ -358,23 +352,34 @@ int main(int argc, char * argv[]) {
     print_status("waiting for directory item");
     auto start = std::chrono::high_resolution_clock::now();
     long milliseconds = 0;
-    while(directoryItem == NULL)
+    while(directoryItem == NULL && milliseconds < dirItemTimeout)
     {
-        auto elapsed = std::chrono::high_resolution_clock::now() - start;
-        milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-        if(milliseconds > dirItemTimeout) {
-            terminate_early("no directory item received");
+        CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false);
+        
+         EDSDK_CHECK( EdsGetEvent() )
+        
+        if(sendKeepAlive) {
+            EDSDK_CHECK( EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0) )
+            sendKeepAlive = false;
         }
         
-        usleep(microseconds);
+        std::this_thread::sleep_for (std::chrono::milliseconds(100));
+        
+        auto elapsed = std::chrono::high_resolution_clock::now() - start;
+        milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     }
-    std::cout << std::endl;
-   
     
-    
-    
-    
-    
+
+
+
+    if(directoryItem==NULL) {
+        terminate_early("directory item timed out.");
+    }
+
+
+
+
+
     //
     //  Get the Directory Item Info
     //
@@ -382,18 +387,20 @@ int main(int argc, char * argv[]) {
     EdsStreamRef stream = NULL;
     EdsDirectoryItemInfo dirItemInfo;
     EDSDK_CHECK( EdsGetDirectoryItemInfo(directoryItem, &dirItemInfo) )
-
+    
     if (dirItemInfo.format != EDSDK_MOV_FORMAT) {
         terminate_early("file format is not the video format");
     }
-
+    
     
     
     
     //
     // Download the video to the EdsStreamRef
+    // TO DO: implement EdsCreateFileStream instead of transferring to memory first
     //
     print_status("downloading video");
+    //EdsCreateFileStream(<#const EdsChar *inFileName#>, <#EdsFileCreateDisposition inCreateDisposition#>, <#EdsAccess inDesiredAccess#>, <#EdsStreamRef *outStream#>)
     EDSDK_CHECK( EdsCreateMemoryStream(0, &stream) )
     EDSDK_CHECK( EdsDownload(directoryItem, dirItemInfo.size, stream) )
     EDSDK_CHECK( EdsDownloadComplete(directoryItem) )
@@ -411,14 +418,14 @@ int main(int argc, char * argv[]) {
     char* streamPointer;
     EDSDK_CHECK( EdsGetPointer(stream, (EdsVoid**)&streamPointer) )
     EDSDK_CHECK( EdsGetLength(stream, &length) )
-
     
     
     
     
     
     
-
+    
+    
     //
     //  Save buffer to disk!
     //
@@ -452,8 +459,14 @@ int main(int argc, char * argv[]) {
         print_status("deleting file from device");
         EDSDK_CHECK( EdsDeleteDirectoryItem(directoryItem) )
     }
+
+
     
     
+    //
+    //  We've listed and assigned callbacks, so we don't need this list any more.
+    //
+    EDSDK_CHECK( EdsRelease(cameraList) )
     
     
     
@@ -466,6 +479,10 @@ int main(int argc, char * argv[]) {
     EDSDK_CHECK( EdsTerminateSDK() )
 
     
+    eventPump = false;
+    t.join();
+    
+        
     print_status("done!");
     return 0;
 }

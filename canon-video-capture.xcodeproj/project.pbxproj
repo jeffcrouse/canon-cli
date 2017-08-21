@@ -10,6 +10,7 @@
 		1FB0BD1E1F4730E7009387AC /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FB0BD1D1F4730E7009387AC /* main.cpp */; };
 		1FB0BD341F474A8B009387AC /* EdsStrings.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FB0BD321F474A8B009387AC /* EdsStrings.cpp */; };
 		1FB0BD351F4782F3009387AC /* EDSDK.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB0BD281F473272009387AC /* EDSDK.framework */; };
+		1FE01BA01F4B500600A49F84 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FE01B9F1F4B500600A49F84 /* CoreFoundation.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -34,6 +35,7 @@
 		1FB0BD321F474A8B009387AC /* EdsStrings.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EdsStrings.cpp; sourceTree = "<group>"; };
 		1FB0BD331F474A8B009387AC /* EdsStrings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EdsStrings.h; sourceTree = "<group>"; };
 		1FB0BD391F4B1624009387AC /* config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = config.xcconfig; sourceTree = "<group>"; };
+		1FE01B9F1F4B500600A49F84 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1FE01BA01F4B500600A49F84 /* CoreFoundation.framework in Frameworks */,
 				1FB0BD351F4782F3009387AC /* EDSDK.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -81,6 +84,7 @@
 		1FB0BD251F473270009387AC /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				1FE01B9F1F4B500600A49F84 /* CoreFoundation.framework */,
 				1FB0BD281F473272009387AC /* EDSDK.framework */,
 				1FB0BD261F473270009387AC /* DPP.framework */,
 			);
