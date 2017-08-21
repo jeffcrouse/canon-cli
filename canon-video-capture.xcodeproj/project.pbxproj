@@ -33,6 +33,7 @@
 		1FB0BD2A1F47344F009387AC /* cxxopts.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = cxxopts.hpp; sourceTree = "<group>"; };
 		1FB0BD321F474A8B009387AC /* EdsStrings.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EdsStrings.cpp; sourceTree = "<group>"; };
 		1FB0BD331F474A8B009387AC /* EdsStrings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EdsStrings.h; sourceTree = "<group>"; };
+		1FB0BD391F4B1624009387AC /* config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +51,7 @@
 		1FB0BD111F4730E6009387AC = {
 			isa = PBXGroup;
 			children = (
+				1FB0BD391F4B1624009387AC /* config.xcconfig */,
 				1FB0BD1C1F4730E7009387AC /* canon-video-capture */,
 				1FB0BD1B1F4730E7009387AC /* Products */,
 				1FB0BD251F473270009387AC /* Frameworks */,

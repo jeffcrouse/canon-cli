@@ -11,7 +11,9 @@
 // TO DO
 // - Connect to camera based on BodyID?
 // - Do we need to transfer, save, and delete file if we are saving to host?
-//
+// - Incorporate .xcconfig file
+// - Figure out why it's transferring the previosu video, not the current
+// - test with multiple cameras
 //
 
 
@@ -43,23 +45,21 @@ bool sendKeepAlive = false;
 bool debug = false;
 std::string outfile="";
 int camera_id = 0;
-bool saveToHost = true;
+//bool saveToHost = false;
 bool sigint_received = false;
 bool deleteAfterDownload = true;
 bool listDevices = false;
+unsigned int microseconds = 100;
+long dirItemTimeout = 10000;
+
+
+EdsCameraRef camera;
 EdsError err;
 EdsDirectoryItemRef directoryItem = NULL;
-unsigned int microseconds = 50;
 
-struct EdsDevice {
-    int id;
-    EdsCameraRef camera;
-    EdsDeviceInfo info;
-    std::string BodyIDEx;
-};
 
 void print_status(std::string message) {
-    std::cout << STATUS_PREFIX << message;
+    std::cout << STATUS_PREFIX << message << std::endl;
 }
 
 std::string make_default_filename() {
@@ -70,7 +70,8 @@ std::string make_default_filename() {
 }
 
 void terminate_early(std::string msg) {
-    std::cerr << ERROR_PREFIX << msg << std::endl;
+    std::cerr << ERROR_PREFIX << msg << ". terminating early." << std::endl;
+    EDSDK_CHECK( EdsCloseSession(camera) )
     EDSDK_CHECK( EdsTerminateSDK() )
     exit(1);
 }
@@ -93,7 +94,7 @@ int main(int argc, char * argv[]) {
             ("d,debug", "Enable debugging", cxxopts::value<bool>(debug))
             ("i,id", "Camera ID", cxxopts::value<int>(), "0")
             ("o,outfile", "Out file", cxxopts::value<std::string>()->default_value(make_default_filename()))
-            ("s,save-to-host", "Save to Host", cxxopts::value<bool>(saveToHost))
+            //("s,save-to-host", "Save to Host", cxxopts::value<bool>(saveToHost))
             ("l,list-devices", "List Devices", cxxopts::value<bool>(listDevices))
             ;
         
@@ -143,78 +144,62 @@ int main(int argc, char * argv[]) {
     
     
     //
-    //  List devices (int id, EdsCameraRef, EdsGetDeviceInfo, string BodyIDEx)
+    //  List devices
     //
-    std::map<int,EdsDevice> devices;
-
+    std::stringstream ss;
+    ss << "Found " << cameraCount << " cameras:" << std::endl;
+    ss << std::setw(10) << "Device ID";
+    ss << std::setw(25) << "Description";
+    ss << std::setw(6) << "Port ";
+    ss << std::setw(11) << "Reserved" << std::endl;
+    
     for(EdsInt32 i=0; i<cameraCount; ++i)
     {
-        EdsDevice device;
-        device.id = i;
+        //EdsDevice device;
+        //device.id = i;
         
-        EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &device.camera) )
-        EDSDK_CHECK( EdsGetDeviceInfo(device.camera, &device.info) )
-    
+        EdsCameraRef _camera;
+        EdsDeviceInfo _info;
         
-        EdsDataType dataType;
-        EdsUInt32 dataSize;
-        EdsGetPropertySize(device.camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
-        char buf[dataSize];
-        EDSDK_CHECK( EdsGetPropertyData(device.camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
+        EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &_camera) )
+        EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
 
-        device.BodyIDEx = std::string(buf);
-        devices.insert(std::make_pair( i, device));
         
-        //EDSDK_CHECK ( EdsRelease(camera) )
+        ss << std::setw(10) << i;
+        ss << std::setw(25) << _info.szDeviceDescription;
+        ss << std::setw(6) << _info.szPortName;
+        ss << std::setw(11) << _info.reserved;
+
+        
+        EDSDK_CHECK ( EdsRelease(_camera) )
     }
+    std::cout << ss.str() << std::endl;
+   
     
-    EDSDK_CHECK( EdsRelease(cameraList) )
+
     
 
     
     
     
-    //
-    //  Iterate through the device map if requested.
-    //
-    if(listDevices)
-    {
-        std::stringstream ss;
-        ss << "Found " << devices.size() << " cameras:" << std::endl;
-        ss << std::setw(10) << "Device ID";
-        ss << std::setw(25) << "Description";
-        ss << std::setw(6) << "Port ";
-        ss << std::setw(11) << "Reserved";
-        ss << std::setw(20) << "Serial" << std::endl;
-        
-        for (auto const& device : devices)
-        {
-            ss << std::setw(10) << device.second.id;
-            ss << std::setw(25) << device.second.info.szDeviceDescription;
-            ss << std::setw(6) << device.second.info.szPortName;
-            ss << std::setw(11) << device.second.info.reserved;
-            ss << std::setw(20) << device.first << std::endl;
-        }
-        
-        std::cout << ss.str();
-        
-        terminate_early("");
-    }
-    
-    
-    
     
     //
-    // Connect to specified device by assigning event handlers
+    // Get the desired camera
     //
     print_status("assigning callbacks");
-    EdsCameraRef camera;
     EdsInt32 cameraIndex = camera_id;
     EDSDK_CHECK( EdsGetChildAtIndex(cameraList, cameraIndex, &camera) )
     
     
+    
+
+    
+ 
+    //
+    //  Assign callbacks
+    //
     err = EdsSetObjectEventHandler(camera, kEdsObjectEvent_All, [](EdsObjectEvent event, EdsBaseRef object, EdsVoid* context) -> EdsError EDSCALLBACK {
-        std::cout << "[object event] " << Eds::getObjectEventString(event);
+        std::cout << "[object event] " << Eds::getObjectEventString(event) << std::endl;
         if(!object) return EDS_ERR_OK;
         
         if(event == kEdsObjectEvent_DirItemCreated) {
@@ -225,17 +210,18 @@ int main(int argc, char * argv[]) {
             EDSDK_CHECK( EdsRelease(object) )
         }
         return EDS_ERR_OK;
+        
     }, NULL);
     EDSDK_CHECK(err)
     
     err = EdsSetPropertyEventHandler(camera, kEdsPropertyEvent_All, [](EdsPropertyEvent event, EdsPropertyID propertyId, EdsUInt32 param, EdsVoid* context) -> EdsError EDSCALLBACK {
-        std::cout << "[property event] " << Eds::getPropertyEventString(event) << ": " << Eds::getPropertyIDString(propertyId) << " / " << param;
+        if(debug) std::cout << "[property event] " << Eds::getPropertyEventString(event) << ": " << Eds::getPropertyIDString(propertyId) << " / " << param << std::endl;
         return EDS_ERR_OK;
     }, NULL);
     EDSDK_CHECK(err)
     
     err = EdsSetCameraStateEventHandler(camera, kEdsStateEvent_All, [](EdsStateEvent event, EdsUInt32 param, EdsVoid* context) -> EdsError EDSCALLBACK {
-        std::cout << "[state event] " << Eds::getStateEventString(event) << ": " << param;
+        std::cout << "[state event] " << Eds::getStateEventString(event) << ": " << param << std::endl;
         
         if(event == kEdsStateEvent_WillSoonShutDown) {
             sendKeepAlive = true;
@@ -253,6 +239,37 @@ int main(int argc, char * argv[]) {
     
     
     
+    
+    //
+    //  Open a session with the camera!
+    //
+    print_status("opening session");
+    EDSDK_CHECK( EdsOpenSession(camera) )
+    
+    
+
+    
+    
+    
+    //
+    //  We've listed and assigned callbacks, so we don't need this list any more.
+    //
+    EDSDK_CHECK( EdsRelease(cameraList) )
+
+    
+
+    
+    
+    //
+    //  Print out serial nmber
+    //
+    EdsDataType dataType;
+    EdsUInt32 dataSize;
+    EdsGetPropertySize(camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
+    char buf[dataSize];
+    EDSDK_CHECK( EdsGetPropertyData(camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
+    std::cout << STATUS_PREFIX << "connected to " << std::string(buf) << std::endl;
+
 
     
     
@@ -261,23 +278,24 @@ int main(int argc, char * argv[]) {
     //
     //  Set the save-to location
     //
-    if(saveToHost) {
-        print_status("setting kEdsSaveTo_Host");
-        EdsUInt32 saveTo = kEdsSaveTo_Host;
-        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
-
-        EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
-        capacity.reset = 1;
-        capacity.bytesPerSector = 512*8;
-        capacity.numberOfFreeClusters = 36864*9999;
-        EDSDK_CHECK( EdsSetCapacity(camera, capacity) )
-    } else {
-        
+//    if(saveToHost) {
+//        print_status("setting kEdsSaveTo_Host");
+//        EdsUInt32 saveTo = kEdsSaveTo_Host;
+//        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
+//
+//        EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
+//        capacity.reset = 1;
+//        capacity.bytesPerSector = 512*8;
+//        capacity.numberOfFreeClusters = 36864*9999;
+//        EDSDK_CHECK( EdsSetCapacity(camera, capacity) )
+//    } else {
+    
         print_status("setting kEdsSaveTo_Camera");
         EdsUInt32 saveTo = kEdsSaveTo_Camera;
-        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
-    }
-    
+        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo), &saveTo) )
+    //}
+
+ 
     
     
     
@@ -295,12 +313,17 @@ int main(int argc, char * argv[]) {
     
     
     
+    
+    
     //
     //  Wait for SIGINT to stop recording
+    //  TODO: Implement a maximum record time
     //
     print_status("recording");
-    while(!sigint_received){
-        std::cout << ".";
+    
+
+    while(sigint_received==false)
+    {
         usleep(microseconds);
         
         if(sendKeepAlive) {
@@ -315,10 +338,12 @@ int main(int argc, char * argv[]) {
     
     
     
+    
     //
     //  Stop recording!
     //
     print_status("stopping");
+    directoryItem = NULL;               // Sometimes there are leftover diritems in the camera. This is to make sure we get the right one when we are done downloading.
     EdsUInt32 record_stop = 0; // End movie shooting
     EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
     
@@ -331,8 +356,16 @@ int main(int argc, char * argv[]) {
     //  Wait for camera to deliver directoryItem to EdsSetObjectEventHandler
     //
     print_status("waiting for directory item");
-    while(!directoryItem) {
-        std::cout << ".";
+    auto start = std::chrono::high_resolution_clock::now();
+    long milliseconds = 0;
+    while(directoryItem == NULL)
+    {
+        auto elapsed = std::chrono::high_resolution_clock::now() - start;
+        milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+        if(milliseconds > dirItemTimeout) {
+            terminate_early("no directory item received");
+        }
+        
         usleep(microseconds);
     }
     std::cout << std::endl;
@@ -429,9 +462,9 @@ int main(int argc, char * argv[]) {
     //  Terminate SDK
     //
     print_status("terminating SDK");
+    EDSDK_CHECK( EdsCloseSession(camera) )
     EDSDK_CHECK( EdsTerminateSDK() )
 
-    
     
     print_status("done!");
     return 0;
