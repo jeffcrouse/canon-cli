@@ -10,10 +10,6 @@
 //
 // TO DO
 // - Connect to camera based on BodyID?
-// - Do we need to transfer, save, and delete file if we are saving to host?
-// - Incorporate .xcconfig file
-// - Figure out why it's transferring the previosu video, not the current
-// - test with multiple cameras
 //
 
 
@@ -45,13 +41,14 @@ bool sendKeepAlive = false;
 bool debug = false;
 std::string outfile="";
 int camera_id = 0;
-//bool saveToHost = false;
+bool saveToHost = false;
 bool sigint_received = false;
 bool deleteAfterDownload = true;
 bool listDevices = false;
-unsigned int microseconds = 100;
-long dirItemTimeout = 10000;
+bool keepAliveOnly = false;
 
+long dirItemTimeout = 10000;
+long maxRecordTime = 600000;
 
 
 EdsCameraRef camera;
@@ -98,9 +95,10 @@ int main(int argc, char * argv[]) {
         options.add_options()
             ("d,debug", "Enable debugging", cxxopts::value<bool>(debug))
             ("i,id", "Camera ID", cxxopts::value<int>(), "0")
-            ("o,outfile", "Out file", cxxopts::value<std::string>()->default_value(make_default_filename()))
+            ("o,outfile", "Out file to save to", cxxopts::value<std::string>()->default_value(make_default_filename()))
             //("s,save-to-host", "Save to Host", cxxopts::value<bool>(saveToHost))
             ("l,list-devices", "List Devices", cxxopts::value<bool>(listDevices))
+            ("k,keep-alive", "Send Keep Alive message", cxxopts::value<bool>(keepAliveOnly))
             ;
         
         options.parse(argc, argv);
@@ -165,14 +163,21 @@ int main(int argc, char * argv[]) {
         
         EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &_camera) )
         EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
-        
+        //EDSDK_CHECK( EdsOpenSession(_camera) )
         
         ss << std::setw(10) << i;
         ss << std::setw(25) << _info.szDeviceDescription;
         ss << std::setw(6) << _info.szPortName;
-        ss << std::setw(11) << _info.reserved;
+        ss << std::setw(11) << _info.reserved << std::endl;
         
-        
+//        EdsDataType dataType;
+//        EdsUInt32 dataSize;
+//        EdsGetPropertySize(_camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
+//        char buf[dataSize];
+//        EDSDK_CHECK( EdsGetPropertyData(_camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
+//        ss << std::string(buf) << std::endl;
+//        
+//        EDSDK_CHECK( EdsCloseSession(_camera) )
         EDSDK_CHECK ( EdsRelease(_camera) )
     }
     std::cout << ss.str() << std::endl;
@@ -182,22 +187,13 @@ int main(int argc, char * argv[]) {
     
     
     //
-    // Get the desired camera
+    // Get the desired camera and ssign callbacks
     //
     print_status("assigning callbacks");
     EdsInt32 cameraIndex = camera_id;
     EDSDK_CHECK( EdsGetChildAtIndex(cameraList, cameraIndex, &camera) )
     
-    
-    
-    
-    
-    
-    
-    
-    //
-    //  Assign callbacks
-    //
+
     err = EdsSetObjectEventHandler(camera, kEdsObjectEvent_All, [](EdsObjectEvent event, EdsBaseRef object, EdsVoid* context) -> EdsError EDSCALLBACK {
         if(debug)
             std::cout << "[object event] " << Eds::getObjectEventString(event) << std::endl;
@@ -230,6 +226,10 @@ int main(int argc, char * argv[]) {
         if(debug)
             std::cout << "[state event] " << Eds::getStateEventString(event) << ": " << param << std::endl;
         
+        if(event == kEdsStateEvent_ShutDownTimerUpdate) {
+            print_status("shutdown timer extended.");
+        }
+        
         if(event == kEdsStateEvent_WillSoonShutDown) {
             sendKeepAlive = true;
         }
@@ -251,13 +251,6 @@ int main(int argc, char * argv[]) {
     
 
     
-
-    
-    
-    
-    //std::thread t(camera_thread);
-    
-    
     
     
     //
@@ -271,9 +264,15 @@ int main(int argc, char * argv[]) {
     
     
     
+
+    
+    
+    
+    
     //
     //  Print out serial nmber
     //
+    
     EdsDataType dataType;
     EdsUInt32 dataSize;
     EdsGetPropertySize(camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
@@ -284,25 +283,49 @@ int main(int argc, char * argv[]) {
     
     
     
+    
+    
+    
+    if(keepAliveOnly) {
+        print_status("sending keep alive");
+        EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
+        
+ 
+        std::this_thread::sleep_for (std::chrono::milliseconds(1000));
+
+        
+        print_status("shutting down");
+        EDSDK_CHECK( EdsCloseSession(camera) )
+        EDSDK_CHECK( EdsTerminateSDK() )
+        exit(0);
+    }
+    
+    
+    
+    
+    
+    
+    
+    
     //
     //  Set the save-to location
     //
-    //    if(saveToHost) {
-    //        print_status("setting kEdsSaveTo_Host");
-    //        EdsUInt32 saveTo = kEdsSaveTo_Host;
-    //        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
-    //
-    //        EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
-    //        capacity.reset = 1;
-    //        capacity.bytesPerSector = 512*8;
-    //        capacity.numberOfFreeClusters = 36864*9999;
-    //        EDSDK_CHECK( EdsSetCapacity(camera, capacity) )
-    //    } else {
+    if(saveToHost) {
+        print_status("setting kEdsSaveTo_Host");
+        EdsUInt32 saveTo = kEdsSaveTo_Host;
+        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
+
+        EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
+        capacity.reset = 1;
+        capacity.bytesPerSector = 512*8;
+        capacity.numberOfFreeClusters = 36864*9999;
+        EDSDK_CHECK( EdsSetCapacity(camera, capacity) )
+    } else {
+        print_status("setting kEdsSaveTo_Camera");
+        EdsUInt32 saveTo = kEdsSaveTo_Camera;
+        EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo), &saveTo) )
+    }
     
-    print_status("setting kEdsSaveTo_Camera");
-    EdsUInt32 saveTo = kEdsSaveTo_Camera;
-    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo), &saveTo) )
-    //}
     
     
     
@@ -314,22 +337,34 @@ int main(int argc, char * argv[]) {
     EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
     
     
+    
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::high_resolution_clock::now() - start;
+    long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+    
+    
     //
     //  Wait for SIGINT to stop recording
-    //  TODO: Implement a maximum record time
     //
     print_status("recording");
-    
-    
-    while(sigint_received==false)
+    while(sigint_received==false && milliseconds < maxRecordTime)
     {
         if(sendKeepAlive) {
             EDSDK_CHECK( EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0) )
             sendKeepAlive = false;
         }
         
-        usleep(microseconds);
+        std::this_thread::sleep_for (std::chrono::milliseconds(100));
+        elapsed = std::chrono::high_resolution_clock::now() - start;
+        milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     }
+    
+    if(milliseconds > maxRecordTime) {
+        print_status("maximum recording time exceeded");
+    }
+    
+    
     
     
     
@@ -343,17 +378,21 @@ int main(int argc, char * argv[]) {
     
     
     
+    
+    
+    
     //
     //  Wait for camera to deliver directoryItem to EdsSetObjectEventHandler
     //
     print_status("waiting for directory item");
-    auto start = std::chrono::high_resolution_clock::now();
-    long milliseconds = 0;
+    start = std::chrono::high_resolution_clock::now();
+    elapsed = std::chrono::high_resolution_clock::now() - start;
+    milliseconds = 0;
     while(directoryItem == NULL && milliseconds < dirItemTimeout)
     {
-        CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false);
+        CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false); // https://stackoverflow.com/questions/23472376/canon-edsdk-handler-isnt-called-on-mac
         
-         EDSDK_CHECK( EdsGetEvent() )
+        EDSDK_CHECK( EdsGetEvent() )
         
         if(sendKeepAlive) {
             EDSDK_CHECK( EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0) )
@@ -362,7 +401,7 @@ int main(int argc, char * argv[]) {
         
         std::this_thread::sleep_for (std::chrono::milliseconds(100));
         
-        auto elapsed = std::chrono::high_resolution_clock::now() - start;
+        elapsed = std::chrono::high_resolution_clock::now() - start;
         milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     }
     

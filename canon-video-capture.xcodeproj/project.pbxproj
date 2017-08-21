@@ -248,6 +248,7 @@
 		};
 		1FB0BD221F4730E7009387AC /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1FB0BD391F4B1624009387AC /* config.xcconfig */;
 			buildSettings = {
 				DEVELOPMENT_TEAM = 7JL9RZ9C8P;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -261,6 +262,7 @@
 		};
 		1FB0BD231F4730E7009387AC /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1FB0BD391F4B1624009387AC /* config.xcconfig */;
 			buildSettings = {
 				DEVELOPMENT_TEAM = 7JL9RZ9C8P;
 				FRAMEWORK_SEARCH_PATHS = (
