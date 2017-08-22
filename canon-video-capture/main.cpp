@@ -7,18 +7,15 @@
 //
 
 
-//
-// TO DO
-// - Connect to camera based on BodyID?
-//
-
-
-
 #define __MACOS__
 #define ERROR_PREFIX "[error] "
+#define WARNING_PREFIX "[warning] "
 #define STATUS_PREFIX "[status] "
-#define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { std::cerr << ERROR_PREFIX << Eds::getErrorString(X) << std::endl;  exit(1); }
+#define READY_MESSAGE "[ready]"
+#define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { std::cerr << ERROR_PREFIX << Eds::getErrorString(X) << std::endl; }
 #define EDSDK_MOV_FORMAT 45317
+#define EDSDK_JPG_FORMAT 14337
+
 
 #include <thread>
 #include <unistd.h>
@@ -37,42 +34,40 @@
 #include "cxxopts.hpp"
 
 
-bool sendKeepAlive = false;
+//
+//  TODO:
+//   - Implement max record time?
+//
+
+
 bool debug = false;
 std::string outfile="";
-int camera_id = 0;
 bool saveToHost = false;
-bool sigint_received = false;
-bool deleteAfterDownload = true;
+bool deleteAfterDownload=false;
 bool listDevices = false;
-bool keepAliveOnly = false;
-
-long dirItemTimeout = 10000;
-long maxRecordTime = 600000;
+bool sdkInitialized = false;
+bool sessionOpen = false;
 
 
-EdsCameraRef camera;
-EdsError err;
-EdsDirectoryItemRef directoryItem = NULL;
-EdsDirectoryItemInfo directoryItemInfo;
+EdsInt32 cameraIndex = -1;;
+EdsCameraRef camera = NULL;
+EdsError err = EDS_ERR_OK;
 
 void print_status(std::string message) {
     std::cout << STATUS_PREFIX << message << std::endl;
 }
 
-std::string make_default_filename() {
-    time_t epoch_time = std::time(0);
-    std::stringstream ss;
-    ss << "vid_" << epoch_time << ".mp4";
-    return ss.str();
+void print_warning(std::string message) {
+    std::cout << WARNING_PREFIX << message << std::endl;
 }
 
 void terminate_early(std::string msg) {
     std::cerr << ERROR_PREFIX << msg << ". terminating early." << std::endl;
-    EDSDK_CHECK( EdsCloseSession(camera) )
-    EDSDK_CHECK( EdsTerminateSDK() )
+    if(sessionOpen) EDSDK_CHECK( EdsCloseSession(camera) )
+    if(sdkInitialized) EDSDK_CHECK( EdsTerminateSDK() )
     exit(1);
 }
+
 
 
 int main(int argc, char * argv[]) {
@@ -80,8 +75,7 @@ int main(int argc, char * argv[]) {
     // Set the signal handler so we can tell when to stop recording
     signal(SIGINT, [](int signum) {
         std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
-        if(sigint_received) exit(1);
-        else sigint_received = true;
+        terminate_early("exiting");
     });
     
     
@@ -94,23 +88,22 @@ int main(int argc, char * argv[]) {
         cxxopts::Options options(argv[0], "Command line program to capture video from a tethered Canon camera using EDSDK");
         options.add_options()
             ("d,debug", "Enable debugging", cxxopts::value<bool>(debug))
-            ("i,id", "Camera ID", cxxopts::value<int>(), "0")
-            ("o,outfile", "Out file to save to", cxxopts::value<std::string>()->default_value(make_default_filename()))
+            ("i,id", "Device ID", cxxopts::value<EdsInt32>()->default_value("0")->implicit_value("0"))
             //("s,save-to-host", "Save to Host", cxxopts::value<bool>(saveToHost))
             ("l,list-devices", "List Devices", cxxopts::value<bool>(listDevices))
-            ("k,keep-alive", "Send Keep Alive message", cxxopts::value<bool>(keepAliveOnly))
+            ("x,delete-after-download", "Delete files after download", cxxopts::value<bool>(deleteAfterDownload))
+            ("help", "Print help")
             ;
         
         options.parse(argc, argv);
         
-        
-        camera_id = options["id"].as<int>();
-        outfile = options["outfile"].as<std::string>();
-        
-        if(debug) {
-            std::cout << "camera ID = " << camera_id << std::endl;
-            std::cout << "outfile = " << outfile << std::endl;
+        if(options.count("help")) {
+            std::cout << options.help() << std::endl;
+            exit(0);
         }
+        
+        
+        cameraIndex = options["id"].as<EdsInt32>();
         
     } catch (const cxxopts::OptionException& e) {
         
@@ -123,6 +116,8 @@ int main(int argc, char * argv[]) {
     //
     print_status("initializing SDK");
     EDSDK_CHECK( EdsInitializeSDK() );
+    sdkInitialized = true;
+    
     
     
     
@@ -144,55 +139,53 @@ int main(int argc, char * argv[]) {
     
     
     
+
     
     //
     //  List devices
     //
-    if(listDevices)
-    {
+    if(listDevices) {
+        EdsCameraRef _camera;
+        EdsDeviceInfo _info;
+        
         std::stringstream ss;
         ss << "Found " << cameraCount << " cameras:" << std::endl;
         ss << std::setw(10) << "Device ID";
-        ss << std::setw(25) << "Description";
-        ss << std::setw(6) << "Port ";
-        ss << std::setw(11) << "Reserved" << std::endl;
-        
+        ss << std::setw(20) << "Description";
+        ss << std::setw(10) << "Port";
+        ss << std::setw(15) << "Reserved";
+        ss << std::setw(30) << "Body ID" << std::endl;
         for(EdsInt32 i=0; i<cameraCount; ++i)
         {
-            
-            EdsCameraRef _camera;
-            EdsDeviceInfo _info;
-            
             EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &_camera) )
             EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
-            //EDSDK_CHECK( EdsOpenSession(_camera) )
             
             ss << std::setw(10) << i;
-            ss << std::setw(25) << _info.szDeviceDescription;
-            ss << std::setw(6) << _info.szPortName;
-            ss << std::setw(11) << _info.reserved << std::endl;
+            ss << std::setw(20) << _info.szDeviceDescription;
+            ss << std::setw(10) << _info.szPortName;
+            ss << std::setw(15) << _info.reserved;
             
+    //        EDSDK_CHECK( EdsOpenSession(_camera) )
     //        EdsDataType dataType;
     //        EdsUInt32 dataSize;
     //        EdsGetPropertySize(_camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
     //        char buf[dataSize];
     //        EDSDK_CHECK( EdsGetPropertyData(_camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
-    //        ss << std::string(buf) << std::endl;
-    //        
+    //        std::string _bodyID = std::string(buf);
+    //        ss << std::setw(30) << _bodyID << std::endl;
     //        EDSDK_CHECK( EdsCloseSession(_camera) )
             EDSDK_CHECK ( EdsRelease(_camera) )
         }
         std::cout << ss.str() << std::endl;
+
     }
     
-
     
     
     //
     // Get the desired camera and ssign callbacks
     //
     print_status("assigning callbacks");
-    EdsInt32 cameraIndex = camera_id;
     EDSDK_CHECK( EdsGetChildAtIndex(cameraList, cameraIndex, &camera) )
     
 
@@ -200,14 +193,61 @@ int main(int argc, char * argv[]) {
         if(debug)
             std::cout << "[object event] " << Eds::getObjectEventString(event) << std::endl;
         
-        if(!object) return EDS_ERR_OK;
+        if(!object)
+            return EDS_ERR_OK;
         
         if(event == kEdsObjectEvent_DirItemCreated) {
-            directoryItem = object;
+            std::stringstream ss;
+            EdsDirectoryItemRef directoryItem = object;
+            EdsDirectoryItemInfo directoryItemInfo;
+
             EDSDK_CHECK( EdsGetDirectoryItemInfo(directoryItem, &directoryItemInfo) )
             
+            
+            ss << "file size " << (directoryItemInfo.size / 1000000.0) << " mb";
+            print_status( ss.str() );
+            
+            
+            
+            if(outfile.empty()) {
+                time_t epoch_time = std::time(0);
+                
+                ss.str("canon_");
+                ss << epoch_time;
+                if (directoryItemInfo.format == EDSDK_MOV_FORMAT) {
+                    ss << ".mp4";
+                }
+                else if(directoryItemInfo.format == EDSDK_JPG_FORMAT) {
+                    ss << ".jpg";
+                }
+                else {
+                    terminate_early("unknown file type");
+                }
+                outfile = ss.str();
+                print_status("downloading "+outfile);
+            }
+     
+            EdsStreamRef outStream;
+            EDSDK_CHECK( EdsCreateFileStream(outfile.c_str(), kEdsFileCreateDisposition_CreateAlways, kEdsAccess_ReadWrite, &outStream) )
+            EdsDownload(directoryItem, directoryItemInfo.size, outStream);
+            EdsDownloadComplete(directoryItem);
+            
+            print_status("releasing data stream");
+            EDSDK_CHECK( EdsRelease(outStream) )
+
+            //
+            //  Delete file after download
+            //
+            if(deleteAfterDownload) {
+                print_status("deleting file from device");
+                EDSDK_CHECK( EdsDeleteDirectoryItem(directoryItem) )
+            }
+
+            outfile = "";
+            std::cout << READY_MESSAGE << std::endl;
+            
         } else if(event == kEdsObjectEvent_DirItemRemoved) {
-            // no need to release a removed item
+            print_status("item removed");
         } else {
             EDSDK_CHECK( EdsRelease(object) )
         }
@@ -233,8 +273,8 @@ int main(int argc, char * argv[]) {
         }
         
         if(event == kEdsStateEvent_WillSoonShutDown) {
-            sendKeepAlive = true;
-        }
+            print_status("sending keep alive");
+            EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);        }
         
         if(event == kEdsStateEvent_Shutdown) {
             terminate_early("kEdsStateEvent_Shutdown received. Exiting.");
@@ -260,7 +300,7 @@ int main(int argc, char * argv[]) {
     //
     print_status("opening session");
     EDSDK_CHECK( EdsOpenSession(camera) )
-    
+    sessionOpen = true;
     
     
     
@@ -288,27 +328,6 @@ int main(int argc, char * argv[]) {
     
     
     
-    if(keepAliveOnly) {
-        print_status("sending keep alive");
-        EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
-        
- 
-        std::this_thread::sleep_for (std::chrono::milliseconds(1000));
-
-        
-        print_status("shutting down");
-        EDSDK_CHECK( EdsCloseSession(camera) )
-        EDSDK_CHECK( EdsTerminateSDK() )
-        exit(0);
-    }
-    
-    
-    
-    
-    
-    
-    
-    
     //
     //  Set the save-to location
     //
@@ -316,7 +335,7 @@ int main(int argc, char * argv[]) {
         print_status("setting kEdsSaveTo_Host");
         EdsUInt32 saveTo = kEdsSaveTo_Host;
         EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_SaveTo, 0, sizeof(saveTo) , &saveTo) )
-
+        
         EdsCapacity capacity;// = {0x7FFFFFFF, 0x1000, 1};
         capacity.reset = 1;
         capacity.bytesPerSector = 512*8;
@@ -329,210 +348,102 @@ int main(int argc, char * argv[]) {
     }
     
     
+
+    
+
     
     
     //
-    //  Start recording
+    //  Enter the interactive loop
     //
-    print_status("start recording");
-    EdsUInt32 record_start = 4; // Begin movie shooting
-    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
+    std::string command;
+    bool recording = false;
+//    auto start = std::chrono::high_resolution_clock::now();
+//    auto elapsed = std::chrono::high_resolution_clock::now() - start;
+//    long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     
-    
-    
-    
-    auto start = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::high_resolution_clock::now() - start;
-    long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-    
-    
-    //
-    //  Wait for SIGINT to stop recording
-    //
-    print_status("recording");
-    while(sigint_received==false && milliseconds < maxRecordTime)
-    {
-        if(sendKeepAlive) {
-            EDSDK_CHECK( EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0) )
-            sendKeepAlive = false;
-        }
+    while (1) {
         
-        std::this_thread::sleep_for (std::chrono::milliseconds(100));
-        elapsed = std::chrono::high_resolution_clock::now() - start;
-        milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-    }
-    
-    if(milliseconds > maxRecordTime) {
-        print_status("maximum recording time exceeded");
-    }
-    
-    
-    
-    
-    
-    //
-    //  Stop recording!
-    //
-    print_status("stopping");
-    directoryItem = NULL;               // This is to make sure we get the right dirItem when we are done downloading.
-    EdsUInt32 record_stop = 0; // End movie shooting
-    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
-    
-    
-    
-    
-    
-    
-    //
-    //  Wait for camera to deliver directoryItem to EdsSetObjectEventHandler
-    //
-    print_status("waiting for directory item");
-    start = std::chrono::high_resolution_clock::now();
-    elapsed = std::chrono::high_resolution_clock::now() - start;
-    milliseconds = 0;
-    while(directoryItem == NULL && milliseconds < dirItemTimeout)
-    {
         CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false); // https://stackoverflow.com/questions/23472376/canon-edsdk-handler-isnt-called-on-mac
         
-        EDSDK_CHECK( EdsGetEvent() )
+        if (isatty(STDIN_FILENO)){
+            std::cout << "> ";
+        }
+        std::getline(std::cin, command);
         
-        if(sendKeepAlive) {
-            EDSDK_CHECK( EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0) )
-            sendKeepAlive = false;
+        std::vector<std::string> words;
+        std::istringstream iss(command);
+        for(std::string s; iss >> s;) words.push_back(s);
+        
+        
+        if(words[0].compare("record")==0) {
+            if(recording) {
+                print_warning("already recording");
+            } else {
+                outfile = "";
+                if(words.size() > 1) {
+                    outfile = words[1];
+                }
+                print_status("start recording");
+                EdsUInt32 record_start = 4; // Begin movie shooting
+                EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
+                recording = true;
+            }
         }
         
-        std::this_thread::sleep_for (std::chrono::milliseconds(100));
         
-        elapsed = std::chrono::high_resolution_clock::now() - start;
-        milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-    }
-    
+        else if(words[0].compare("stop")==0) {
+            if(!recording) {
+                print_warning("not recording");
+            } else {
+                if(words.size() > 1) {
+                    outfile = words[1];
+                }
+                
+                print_status("stopping");
+                EdsUInt32 record_stop = 0; // End movie shooting
+                EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
+                recording = false;
+            }
+        }
+        
+        else if(words[0].compare("picture")==0) {
+            print_status("not yet implemented");
+            
+            /*
+            outfile = "";
+            if(words.size() > 1) {
+                outfile = words[1];
+            }
+            EDSDK_CHECK( EdsSendCommand(camera, kEdsCameraCommand_TakePicture, 0) )
+             */
+        }
 
-
-    
-    
-    if(directoryItem==NULL) {
-        terminate_early("directory item timed out.");
-    }
-
-
-
-
-
-    //
-    //  Get the Directory Item Info
-    //
-    print_status("fetching directory item info");
-    
-    EdsDirectoryItemInfo dirItemInfo;
-    EDSDK_CHECK( EdsGetDirectoryItemInfo(directoryItem, &dirItemInfo) )
-    
-    if (dirItemInfo.format != EDSDK_MOV_FORMAT) {
-        terminate_early("file format is not the video format");
-    }
-    
-    
-    
-    
-    //
-    // Download the video to the EdsStreamRef
-    //
-    print_status("downloading video");
-    
-    
-    EdsStreamRef outStream;
-    EDSDK_CHECK( EdsCreateFileStream(outfile.c_str(), kEdsFileCreateDisposition_CreateAlways, kEdsAccess_ReadWrite, &outStream) )
-    EdsDownload(directoryItem, directoryItemInfo.size, outStream);
-    EdsDownloadComplete(directoryItem);
-    
- 
-    
-    
-    
-    
-    
-    
-    
-    print_status("releasing data stream");
-    EDSDK_CHECK( EdsRelease(outStream) )
-    
-    
-    
-    
-
-    
-    /**
-    
-     EdsStreamRef stream = NULL;
-     EDSDK_CHECK( EdsCreateMemoryStream(0, &stream) )
-     EDSDK_CHECK( EdsDownload(directoryItem, dirItemInfo.size, stream) )
-     EDSDK_CHECK( EdsDownloadComplete(directoryItem) )
-
-     
-    //
-    //  Get pointer to the stream
-    //
-    print_status("fetching poiter to data");
-    EdsUInt64 length;
-    EdsGetLength(stream, &length);
-    char* streamPointer;
-    EDSDK_CHECK( EdsGetPointer(stream, (EdsVoid**)&streamPointer) )
-    EDSDK_CHECK( EdsGetLength(stream, &length) )
-    
-    
-    
-    //
-    //  Save buffer to disk!
-    //
-    print_status("saving data to disk");
-    std::ofstream fout(outfile, std::ios::out | std::ios::binary);
-    fout.write((char*)&streamPointer[0], length);
-    fout.close();
-    if(fout.bad()) {
-        std::cerr << "WARNING: File has bad byte" << std::endl;
+        
+        else if (command.compare("exit") == 0) {
+            print_status("exit");
+            break;
+        }
+        else {
+            print_warning("unknown command");
+        }
+        
+        std::cout << READY_MESSAGE << std::endl;
     }
     
     
     
-    
-    
-    //
-    //  Release the Stream!
-    //
-    print_status("releasing data stream");
-    EDSDK_CHECK( EdsRelease(stream) )
-    */
-    
-    
-    
-    
-    
-    //
-    //  Delete file after download
-    //
-    if(deleteAfterDownload) {
-        print_status("deleting file from device");
-        EDSDK_CHECK( EdsDeleteDirectoryItem(directoryItem) )
-    }
 
-
-    
-    
-    //
-    //  We've listed and assigned callbacks, so we don't need this list any more.
-    //
-    EDSDK_CHECK( EdsRelease(cameraList) )
-    
-    
-    
     
     //
     //  Terminate SDK
     //
     print_status("terminating SDK");
-    EDSDK_CHECK( EdsCloseSession(camera) )
-    EDSDK_CHECK( EdsTerminateSDK() )
-
+    EDSDK_CHECK( EdsRelease(cameraList) )
+    if(sessionOpen) EDSDK_CHECK( EdsCloseSession(camera) )
+    sessionOpen = false;
+    if(sdkInitialized) EDSDK_CHECK( EdsTerminateSDK() )
+    sdkInitialized = false;
     
 
     print_status("done!");

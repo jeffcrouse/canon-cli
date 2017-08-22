@@ -1,0 +1,39 @@
+
+
+// For downloading files into memory
+
+EdsStreamRef stream = NULL;
+EDSDK_CHECK( EdsCreateMemoryStream(0, &stream) )
+EDSDK_CHECK( EdsDownload(directoryItem, dirItemInfo.size, stream) )
+EDSDK_CHECK( EdsDownloadComplete(directoryItem) )
+
+
+//
+//  Get pointer to the stream
+//
+print_status("fetching poiter to data");
+EdsUInt64 length;
+EdsGetLength(stream, &length);
+char* streamPointer;
+EDSDK_CHECK( EdsGetPointer(stream, (EdsVoid**)&streamPointer) )
+EDSDK_CHECK( EdsGetLength(stream, &length) )
+
+
+
+//
+//  Save buffer to disk!
+//
+print_status("saving data to disk");
+std::ofstream fout(outfile, std::ios::out | std::ios::binary);
+fout.write((char*)&streamPointer[0], length);
+fout.close();
+if(fout.bad()) {
+    std::cerr << "WARNING: File has bad byte" << std::endl;
+}
+
+
+//
+//  Release the Stream!
+//
+print_status("releasing data stream");
+EDSDK_CHECK( EdsRelease(stream) )
