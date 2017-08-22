@@ -148,40 +148,42 @@ int main(int argc, char * argv[]) {
     //
     //  List devices
     //
-    std::stringstream ss;
-    ss << "Found " << cameraCount << " cameras:" << std::endl;
-    ss << std::setw(10) << "Device ID";
-    ss << std::setw(25) << "Description";
-    ss << std::setw(6) << "Port ";
-    ss << std::setw(11) << "Reserved" << std::endl;
-    
-    for(EdsInt32 i=0; i<cameraCount; ++i)
+    if(listDevices)
     {
+        std::stringstream ss;
+        ss << "Found " << cameraCount << " cameras:" << std::endl;
+        ss << std::setw(10) << "Device ID";
+        ss << std::setw(25) << "Description";
+        ss << std::setw(6) << "Port ";
+        ss << std::setw(11) << "Reserved" << std::endl;
         
-        EdsCameraRef _camera;
-        EdsDeviceInfo _info;
-        
-        EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &_camera) )
-        EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
-        //EDSDK_CHECK( EdsOpenSession(_camera) )
-        
-        ss << std::setw(10) << i;
-        ss << std::setw(25) << _info.szDeviceDescription;
-        ss << std::setw(6) << _info.szPortName;
-        ss << std::setw(11) << _info.reserved << std::endl;
-        
-//        EdsDataType dataType;
-//        EdsUInt32 dataSize;
-//        EdsGetPropertySize(_camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
-//        char buf[dataSize];
-//        EDSDK_CHECK( EdsGetPropertyData(_camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
-//        ss << std::string(buf) << std::endl;
-//        
-//        EDSDK_CHECK( EdsCloseSession(_camera) )
-        EDSDK_CHECK ( EdsRelease(_camera) )
+        for(EdsInt32 i=0; i<cameraCount; ++i)
+        {
+            
+            EdsCameraRef _camera;
+            EdsDeviceInfo _info;
+            
+            EDSDK_CHECK( EdsGetChildAtIndex(cameraList, i, &_camera) )
+            EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
+            //EDSDK_CHECK( EdsOpenSession(_camera) )
+            
+            ss << std::setw(10) << i;
+            ss << std::setw(25) << _info.szDeviceDescription;
+            ss << std::setw(6) << _info.szPortName;
+            ss << std::setw(11) << _info.reserved << std::endl;
+            
+    //        EdsDataType dataType;
+    //        EdsUInt32 dataSize;
+    //        EdsGetPropertySize(_camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
+    //        char buf[dataSize];
+    //        EDSDK_CHECK( EdsGetPropertyData(_camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
+    //        ss << std::string(buf) << std::endl;
+    //        
+    //        EDSDK_CHECK( EdsCloseSession(_camera) )
+            EDSDK_CHECK ( EdsRelease(_camera) )
+        }
+        std::cout << ss.str() << std::endl;
     }
-    std::cout << ss.str() << std::endl;
-    
     
 
     
