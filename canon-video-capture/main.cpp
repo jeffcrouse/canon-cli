@@ -212,8 +212,9 @@ int main(int argc, char * argv[]) {
             if(outfile.empty()) {
                 time_t epoch_time = std::time(0);
                 
-                ss.str("canon_");
-                ss << epoch_time;
+                ss.str("");
+                ss << "canon_" << cameraIndex << "_"  << epoch_time;
+
                 if (directoryItemInfo.format == EDSDK_MOV_FORMAT) {
                     ss << ".mp4";
                 }
@@ -371,6 +372,8 @@ int main(int argc, char * argv[]) {
         }
         std::getline(std::cin, command);
         
+        command.erase( remove( command.begin(), command.end(), '\"' ), command.end() );
+        
         std::vector<std::string> words;
         std::istringstream iss(command);
         for(std::string s; iss >> s;) words.push_back(s);
@@ -425,7 +428,7 @@ int main(int argc, char * argv[]) {
             break;
         }
         else {
-            print_warning("unknown command");
+            print_warning("unknown command: "+words[0]);
         }
         
         std::cout << READY_MESSAGE << std::endl;
