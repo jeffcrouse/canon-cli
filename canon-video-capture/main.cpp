@@ -273,7 +273,8 @@ int main(int argc, char * argv[]) {
         
         if(event == kEdsStateEvent_WillSoonShutDown) {
             print_status("sending keep alive");
-            EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);        }
+            EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
+        }
         
         if(event == kEdsStateEvent_Shutdown) {
             terminate_early("kEdsStateEvent_Shutdown received. Exiting.");
@@ -379,14 +380,15 @@ int main(int argc, char * argv[]) {
     //
     
     bool recording = false;
-//    auto start = std::chrono::high_resolution_clock::now();
-//    auto elapsed = std::chrono::high_resolution_clock::now() - start;
-//    long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+    auto start = std::chrono::high_resolution_clock::now();
     
     while (!sigint) {
-        
         CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false); // https://stackoverflow.com/questions/23472376/canon-edsdk-handler-isnt-called-on-mac
         
+        
+        //
+        //  Process any commands in the user input queue
+        //
         if(command_queue.size()) {
             
             command_queue_mutex.lock();
@@ -448,8 +450,19 @@ int main(int argc, char * argv[]) {
             }
         
         }
+        
+        
+        auto now = std::chrono::high_resolution_clock::now();
+        auto elapsed = now - start;
+        long seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        if(seconds > 60) {
+            print_status("sending keep alive");
+            EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
+            start = std::chrono::high_resolution_clock::now();
+        }
+        
+        
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
     }
     
     
@@ -459,8 +472,10 @@ int main(int argc, char * argv[]) {
     //
     //  Terminate SDK
     //
-    print_status("terminating SDK");
+    print_status("waiting for input thread");
     input.join();
+    
+    print_status("terminating SDK");
     EDSDK_CHECK( EdsRelease(cameraList) )
     if(sessionOpen) EDSDK_CHECK( EdsCloseSession(camera) )
     sessionOpen = false;
