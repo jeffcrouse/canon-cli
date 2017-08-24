@@ -11,7 +11,6 @@
 #define ERROR_PREFIX "[error] "
 #define WARNING_PREFIX "[warning] "
 #define STATUS_PREFIX "[status] "
-#define READY_MESSAGE "[ready]"
 #define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { std::cerr << ERROR_PREFIX << Eds::getErrorString(X) << std::endl; }
 #define EDSDK_MOV_FORMAT 45317
 #define EDSDK_JPG_FORMAT 14337
@@ -47,7 +46,9 @@ bool deleteAfterDownload=false;
 bool listDevices = false;
 bool sdkInitialized = false;
 bool sessionOpen = false;
-
+std::vector<std::string> command_queue;
+std::mutex command_queue_mutex;
+bool sigint = false;
 
 EdsInt32 cameraIndex = -1;;
 EdsCameraRef camera = NULL;
@@ -75,7 +76,8 @@ int main(int argc, char * argv[]) {
     // Set the signal handler so we can tell when to stop recording
     signal(SIGINT, [](int signum) {
         std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
-        terminate_early("exiting");
+        if(sigint) exit(1);
+        sigint = true;
     });
     
     
@@ -129,7 +131,6 @@ int main(int argc, char * argv[]) {
     EdsCameraListRef cameraList;
     UInt32 cameraCount;
     
-    print_status("listing cameras");
     EDSDK_CHECK( EdsGetCameraList(&cameraList) );
     EDSDK_CHECK( EdsGetChildCount(cameraList, &cameraCount) );
     
@@ -145,6 +146,7 @@ int main(int argc, char * argv[]) {
     //  List devices
     //
     if(listDevices) {
+        print_status("listing devices");
         EdsCameraRef _camera;
         EdsDeviceInfo _info;
         
@@ -203,11 +205,8 @@ int main(int argc, char * argv[]) {
 
             EDSDK_CHECK( EdsGetDirectoryItemInfo(directoryItem, &directoryItemInfo) )
             
-            
             ss << "file size " << (directoryItemInfo.size / 1000000.0) << " mb";
             print_status( ss.str() );
-            
-            
             
             if(outfile.empty()) {
                 time_t epoch_time = std::time(0);
@@ -245,8 +244,7 @@ int main(int argc, char * argv[]) {
             }
 
             outfile = "";
-            std::cout << READY_MESSAGE << std::endl;
-            
+    
         } else if(event == kEdsObjectEvent_DirItemRemoved) {
             print_status("item removed");
         } else {
@@ -265,7 +263,7 @@ int main(int argc, char * argv[]) {
     EDSDK_CHECK(err)
     
     
-    err = EdsSetCameraStateEventHandler(camera, kEdsStateEvent_All, [](EdsStateEvent event, EdsUInt32 param, EdsVoid* context) -> EdsError EDSCALLBACK{
+    err = EdsSetCameraStateEventHandler(camera, kEdsStateEvent_All, [](EdsStateEvent event, EdsUInt32 param, EdsVoid* context) -> EdsError EDSCALLBACK {
         if(debug)
             std::cout << "[state event] " << Eds::getStateEventString(event) << ": " << param << std::endl;
         
@@ -351,97 +349,118 @@ int main(int argc, char * argv[]) {
     
 
     
-
+    
+    //
+    //  Input thread
+    //
+    std::thread input([](){
+        while(!sigint) {
+            if (isatty(STDIN_FILENO)){
+                std::cout << "> ";
+            }
+            
+            std::string command;
+            std::getline(std::cin, command);
+            
+            if (command.compare("exit") == 0) {
+                print_status("exit");
+                sigint = true;
+            } else {
+                command_queue_mutex.lock();
+                command_queue.push_back(command);
+                command_queue_mutex.unlock();
+            }
+        }
+    });
     
     
     //
     //  Enter the interactive loop
     //
-    std::string command;
+    
     bool recording = false;
 //    auto start = std::chrono::high_resolution_clock::now();
 //    auto elapsed = std::chrono::high_resolution_clock::now() - start;
 //    long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     
-    while (1) {
+    while (!sigint) {
         
         CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false); // https://stackoverflow.com/questions/23472376/canon-edsdk-handler-isnt-called-on-mac
         
-        if (isatty(STDIN_FILENO)){
-            std::cout << "> ";
-        }
-        std::getline(std::cin, command);
-        
-        command.erase( remove( command.begin(), command.end(), '\"' ), command.end() );
-        
-        std::vector<std::string> words;
-        std::istringstream iss(command);
-        for(std::string s; iss >> s;) words.push_back(s);
-        
-        
-        if(words[0].compare("record")==0) {
-            if(recording) {
-                print_warning("already recording");
-            } else {
+        if(command_queue.size()) {
+            
+            command_queue_mutex.lock();
+            std::string command = command_queue.back();
+            command_queue.pop_back();
+            command_queue_mutex.unlock();
+            
+            
+            command.erase( remove( command.begin(), command.end(), '\"' ), command.end() );
+            
+            std::vector<std::string> words;
+            std::istringstream iss(command);
+            for(std::string s; iss >> s;) words.push_back(s);
+            
+            if(words[0].compare("record")==0) {
+                if(recording) {
+                    print_warning("already recording");
+                } else {
+                    outfile = "";
+                    if(words.size() > 1) {
+                        outfile = words[1];
+                    }
+                    print_status("start recording");
+                    EdsUInt32 record_start = 4; // Begin movie shooting
+                    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
+                    recording = true;
+                }
+            }
+            
+            
+            else if(words[0].compare("stop")==0) {
+                if(!recording) {
+                    print_warning("not recording");
+                } else {
+                    if(words.size() > 1) {
+                        outfile = words[1];
+                    }
+                    
+                    print_status("stopping");
+                    EdsUInt32 record_stop = 0; // End movie shooting
+                    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
+                    recording = false;
+                }
+            }
+            
+            else if(words[0].compare("picture")==0) {
+               // print_status("not yet implemented");
+                
+ 
                 outfile = "";
                 if(words.size() > 1) {
                     outfile = words[1];
                 }
-                print_status("start recording");
-                EdsUInt32 record_start = 4; // Begin movie shooting
-                EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
-                recording = true;
+                EDSDK_CHECK( EdsSendCommand(camera, kEdsCameraCommand_TakePicture, 0) )
             }
-        }
-        
-        
-        else if(words[0].compare("stop")==0) {
-            if(!recording) {
-                print_warning("not recording");
-            } else {
-                if(words.size() > 1) {
-                    outfile = words[1];
-                }
-                
-                print_status("stopping");
-                EdsUInt32 record_stop = 0; // End movie shooting
-                EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
-                recording = false;
-            }
-        }
-        
-        else if(words[0].compare("picture")==0) {
-            print_status("not yet implemented");
-            
-            /*
-            outfile = "";
-            if(words.size() > 1) {
-                outfile = words[1];
-            }
-            EDSDK_CHECK( EdsSendCommand(camera, kEdsCameraCommand_TakePicture, 0) )
-             */
-        }
 
+            else {
+                print_warning("unknown command: "+words[0]);
+            }
         
-        else if (command.compare("exit") == 0) {
-            print_status("exit");
-            break;
         }
-        else {
-            print_warning("unknown command: "+words[0]);
-        }
-        
-        std::cout << READY_MESSAGE << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
     }
     
     
     
-
+    
     
     //
     //  Terminate SDK
     //
     print_status("terminating SDK");
+    input.join();
     EDSDK_CHECK( EdsRelease(cameraList) )
     if(sessionOpen) EDSDK_CHECK( EdsCloseSession(camera) )
     sessionOpen = false;
