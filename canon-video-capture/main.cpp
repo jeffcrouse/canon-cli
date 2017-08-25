@@ -15,7 +15,7 @@
 #define EDSDK_MOV_FORMAT 45317
 #define EDSDK_JPG_FORMAT 14337
 
-
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #import <iostream>
@@ -69,6 +69,11 @@ void terminate_early(std::string msg) {
     exit(1);
 }
 
+bool fileExists(const std::string& filename) {
+    struct stat buf;
+    if (stat(filename.c_str(), &buf) != -1) return true;
+    return false;
+}
 
 
 int main(int argc, char * argv[]) {
@@ -224,6 +229,11 @@ int main(int argc, char * argv[]) {
                     terminate_early("unknown file type");
                 }
                 outfile = ss.str();
+                
+                if(fileExists(outfile)) {
+                    terminate_early(outfile+" already exists");
+                }
+                
                 print_status("downloading "+outfile);
             }
      
@@ -243,6 +253,8 @@ int main(int argc, char * argv[]) {
                 EDSDK_CHECK( EdsDeleteDirectoryItem(directoryItem) )
             }
 
+            print_status("downloaded "+outfile);
+            
             outfile = "";
     
         } else if(event == kEdsObjectEvent_DirItemRemoved) {
@@ -356,9 +368,9 @@ int main(int argc, char * argv[]) {
     //
     std::thread input([](){
         while(!sigint) {
-            if (isatty(STDIN_FILENO)){
-                std::cout << "> ";
-            }
+//            if (isatty(STDIN_FILENO)){
+//                std::cout << "> ";
+//            }
             
             std::string command;
             std::getline(std::cin, command);
@@ -379,17 +391,23 @@ int main(int argc, char * argv[]) {
     //  Enter the interactive loop
     //
     
-    bool recording = false;
     auto start = std::chrono::high_resolution_clock::now();
-    
     while (!sigint) {
         CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false); // https://stackoverflow.com/questions/23472376/canon-edsdk-handler-isnt-called-on-mac
         
+        
+        EDSDK_CHECK( EdsGetEvent() ) // I don't think this dos anything.
         
         //
         //  Process any commands in the user input queue
         //
         if(command_queue.size()) {
+            
+            // Get the recording state.
+            EdsUInt32 recordStart;
+            EDSDK_CHECK( EdsGetPropertyData(camera, kEdsPropID_Record, 0, sizeof(recordStart), &recordStart) )
+            bool recording = (recordStart==4);
+            
             
             command_queue_mutex.lock();
             std::string command = command_queue.back();
@@ -456,7 +474,7 @@ int main(int argc, char * argv[]) {
         auto elapsed = now - start;
         long seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         if(seconds > 60) {
-            print_status("sending keep alive");
+            //print_status("sending keep alive");
             EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
             start = std::chrono::high_resolution_clock::now();
         }
