@@ -42,6 +42,7 @@
 bool debug = false;
 std::string outfile="";
 bool saveToHost = false;
+bool overwrite = false;
 bool deleteAfterDownload=false;
 bool listDevices = false;
 bool sdkInitialized = false;
@@ -97,6 +98,7 @@ int main(int argc, char * argv[]) {
             ("d,debug", "Enable debugging", cxxopts::value<bool>(debug))
             ("i,id", "Device ID", cxxopts::value<EdsInt32>()->default_value("0")->implicit_value("0"))
             //("s,save-to-host", "Save to Host", cxxopts::value<bool>(saveToHost))
+            ("o,overwrite", "Overwrite existing files", cxxopts::value<bool>(overwrite))
             ("l,list-devices", "List Devices", cxxopts::value<bool>(listDevices))
             ("x,delete-after-download", "Delete files after download", cxxopts::value<bool>(deleteAfterDownload))
             ("help", "Print help")
@@ -229,10 +231,6 @@ int main(int argc, char * argv[]) {
                     terminate_early("unknown file type");
                 }
                 outfile = ss.str();
-                
-                if(fileExists(outfile)) {
-                    terminate_early(outfile+" already exists");
-                }
                 
                 print_status("downloading "+outfile);
             }
@@ -428,7 +426,12 @@ int main(int argc, char * argv[]) {
                     outfile = "";
                     if(words.size() > 1) {
                         outfile = words[1];
+                        if(!overwrite && fileExists(outfile)) {
+                            terminate_early(outfile+" already exists");
+                        }
                     }
+                    
+                    
                     print_status("start recording");
                     EdsUInt32 record_start = 4; // Begin movie shooting
                     EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_start), &record_start) )
@@ -441,8 +444,12 @@ int main(int argc, char * argv[]) {
                 if(!recording) {
                     print_warning("not recording");
                 } else {
+                    
                     if(words.size() > 1) {
                         outfile = words[1];
+                        if(!overwrite && fileExists(outfile)) {
+                            terminate_early(outfile+" already exists");
+                        }
                     }
                     
                     print_status("stopping");
