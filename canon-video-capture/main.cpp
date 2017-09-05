@@ -41,15 +41,21 @@
 
 bool debug = false;
 std::string outfile="";
+std::string defaultDir;
 bool saveToHost = false;
 bool overwrite = false;
 bool deleteAfterDownload=false;
 bool listDevices = false;
 bool sdkInitialized = false;
 bool sessionOpen = false;
-std::vector<std::string> command_queue;
+
+typedef std::vector<std::string> command;
+std::vector<command> command_queue;
+
 std::mutex command_queue_mutex;
 bool sigint = false;
+bool downloading = false;
+
 
 EdsInt32 cameraIndex = -1;;
 EdsCameraRef camera = NULL;
@@ -101,6 +107,7 @@ int main(int argc, char * argv[]) {
             ("o,overwrite", "Overwrite existing files", cxxopts::value<bool>(overwrite))
             ("l,list-devices", "List Devices", cxxopts::value<bool>(listDevices))
             ("x,delete-after-download", "Delete files after download", cxxopts::value<bool>(deleteAfterDownload))
+            ("r,default-dir", "Default directory to save to if no path is given", cxxopts::value<std::string>()->default_value(".")->implicit_value("."))
             ("help", "Print help")
             ;
         
@@ -111,7 +118,7 @@ int main(int argc, char * argv[]) {
             exit(0);
         }
         
-        
+        defaultDir = options["default-dir"].as<std::string>();
         cameraIndex = options["id"].as<EdsInt32>();
         
     } catch (const cxxopts::OptionException& e) {
@@ -206,6 +213,8 @@ int main(int argc, char * argv[]) {
             return EDS_ERR_OK;
         
         if(event == kEdsObjectEvent_DirItemCreated) {
+            
+            downloading = true;
             std::stringstream ss;
             EdsDirectoryItemRef directoryItem = object;
             EdsDirectoryItemInfo directoryItemInfo;
@@ -219,7 +228,7 @@ int main(int argc, char * argv[]) {
                 time_t epoch_time = std::time(0);
                 
                 ss.str("");
-                ss << "canon_" << cameraIndex << "_"  << epoch_time;
+                ss << defaultDir << "/canon_" << cameraIndex << "_"  << epoch_time;
 
                 if (directoryItemInfo.format == EDSDK_MOV_FORMAT) {
                     ss << ".mp4";
@@ -234,7 +243,7 @@ int main(int argc, char * argv[]) {
                 
                 print_status("downloading "+outfile);
             }
-     
+            
             EdsStreamRef outStream;
             EDSDK_CHECK( EdsCreateFileStream(outfile.c_str(), kEdsFileCreateDisposition_CreateAlways, kEdsAccess_ReadWrite, &outStream) )
             EdsDownload(directoryItem, directoryItemInfo.size, outStream);
@@ -242,10 +251,8 @@ int main(int argc, char * argv[]) {
             
             print_status("releasing data stream");
             EDSDK_CHECK( EdsRelease(outStream) )
-
-            //
+            
             //  Delete file after download
-            //
             if(deleteAfterDownload) {
                 print_status("deleting file from device");
                 EDSDK_CHECK( EdsDeleteDirectoryItem(directoryItem) )
@@ -253,6 +260,7 @@ int main(int argc, char * argv[]) {
 
             print_status("downloaded "+outfile);
             
+            downloading = false;
             outfile = "";
     
         } else if(event == kEdsObjectEvent_DirItemRemoved) {
@@ -370,15 +378,33 @@ int main(int argc, char * argv[]) {
 //                std::cout << "> ";
 //            }
             
-            std::string command;
-            std::getline(std::cin, command);
             
-            if (command.compare("exit") == 0) {
+            std::string input;
+            std::getline(std::cin, input);
+            
+            if(downloading) {
+                print_warning("can't accept commands while downloading. ignoring");
+                break;
+            }
+            
+            // Clear out any quotes. It fucks shit up.
+            input.erase( remove( input.begin(), input.end(), '\"' ), input.end() );
+            
+            // Split the input string into words
+            command cmd;
+            std::istringstream iss(input);
+            for(std::string s; iss >> s;) cmd.push_back(s);
+            
+            
+            //print_status("\""+command+"\"");
+            
+            if (cmd[0].compare("exit") == 0) {
                 print_status("exit");
                 sigint = true;
+                //break;
             } else {
                 command_queue_mutex.lock();
-                command_queue.push_back(command);
+                command_queue.push_back(cmd);
                 command_queue_mutex.unlock();
             }
         }
@@ -392,7 +418,6 @@ int main(int argc, char * argv[]) {
     auto start = std::chrono::high_resolution_clock::now();
     while (!sigint) {
         CFRunLoopRunInMode( kCFRunLoopDefaultMode, 0, false); // https://stackoverflow.com/questions/23472376/canon-edsdk-handler-isnt-called-on-mac
-        
         
         EDSDK_CHECK( EdsGetEvent() ) // I don't think this dos anything.
         
@@ -408,24 +433,20 @@ int main(int argc, char * argv[]) {
             
             
             command_queue_mutex.lock();
-            std::string command = command_queue.back();
+            command cmd = command_queue.back();
             command_queue.pop_back();
             command_queue_mutex.unlock();
             
             
-            command.erase( remove( command.begin(), command.end(), '\"' ), command.end() );
             
-            std::vector<std::string> words;
-            std::istringstream iss(command);
-            for(std::string s; iss >> s;) words.push_back(s);
-            
-            if(words[0].compare("record")==0) {
+
+            if(cmd[0].compare("record")==0) {
                 if(recording) {
                     print_warning("already recording");
                 } else {
                     outfile = "";
-                    if(words.size() > 1) {
-                        outfile = words[1];
+                    if(cmd.size() > 1) {
+                        outfile = cmd[1];
                         if(!overwrite && fileExists(outfile)) {
                             terminate_early(outfile+" already exists");
                         }
@@ -440,13 +461,13 @@ int main(int argc, char * argv[]) {
             }
             
             
-            else if(words[0].compare("stop")==0) {
+            else if(cmd[0].compare("stop")==0) {
                 if(!recording) {
                     print_warning("not recording");
                 } else {
                     
-                    if(words.size() > 1) {
-                        outfile = words[1];
+                    if(cmd.size() > 1) {
+                        outfile = cmd[1];
                         if(!overwrite && fileExists(outfile)) {
                             terminate_early(outfile+" already exists");
                         }
@@ -459,19 +480,21 @@ int main(int argc, char * argv[]) {
                 }
             }
             
-            else if(words[0].compare("picture")==0) {
+            else if(cmd[0].compare("picture")==0) {
                // print_status("not yet implemented");
-                
- 
-                outfile = "";
-                if(words.size() > 1) {
-                    outfile = words[1];
+                if(recording) {
+                    print_warning("can't take a picture while recording");
+                } else {
+                    outfile = "";
+                    if(cmd.size() > 1) {
+                        outfile = cmd[1];
+                    }
+                    EDSDK_CHECK( EdsSendCommand(camera, kEdsCameraCommand_TakePicture, 0) )
                 }
-                EDSDK_CHECK( EdsSendCommand(camera, kEdsCameraCommand_TakePicture, 0) )
             }
 
             else {
-                print_warning("unknown command: "+words[0]);
+                print_warning("unknown command: "+cmd[0]);
             }
         
         }
