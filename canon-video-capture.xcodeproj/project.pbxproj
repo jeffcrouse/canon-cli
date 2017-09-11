@@ -11,6 +11,8 @@
 		1FB0BD341F474A8B009387AC /* EdsStrings.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FB0BD321F474A8B009387AC /* EdsStrings.cpp */; };
 		1FB0BD351F4782F3009387AC /* EDSDK.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB0BD281F473272009387AC /* EDSDK.framework */; };
 		1FE01BA01F4B500600A49F84 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FE01B9F1F4B500600A49F84 /* CoreFoundation.framework */; };
+		1FF1FC931F6733E400D56337 /* Logger.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FF1FC911F6733E400D56337 /* Logger.cpp */; };
+		1FF1FC961F67347C00D56337 /* Session.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1FF1FC941F67347C00D56337 /* Session.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -36,6 +38,11 @@
 		1FB0BD331F474A8B009387AC /* EdsStrings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EdsStrings.h; sourceTree = "<group>"; };
 		1FB0BD391F4B1624009387AC /* config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = config.xcconfig; sourceTree = "<group>"; };
 		1FE01B9F1F4B500600A49F84 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		1FF1FC8F1F67285E00D56337 /* json.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = json.hpp; sourceTree = "<group>"; };
+		1FF1FC911F6733E400D56337 /* Logger.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Logger.cpp; sourceTree = "<group>"; };
+		1FF1FC921F6733E400D56337 /* Logger.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Logger.hpp; sourceTree = "<group>"; };
+		1FF1FC941F67347C00D56337 /* Session.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Session.cpp; sourceTree = "<group>"; };
+		1FF1FC951F67347C00D56337 /* Session.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Session.hpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,10 +80,15 @@
 			isa = PBXGroup;
 			children = (
 				1FB0BD1D1F4730E7009387AC /* main.cpp */,
+				1FF1FC8F1F67285E00D56337 /* json.hpp */,
 				1FB0BD2A1F47344F009387AC /* cxxopts.hpp */,
 				1FB0BD321F474A8B009387AC /* EdsStrings.cpp */,
 				1FB0BD331F474A8B009387AC /* EdsStrings.h */,
 				1FB0BD241F47325C009387AC /* EDSDK */,
+				1FF1FC911F6733E400D56337 /* Logger.cpp */,
+				1FF1FC921F6733E400D56337 /* Logger.hpp */,
+				1FF1FC941F67347C00D56337 /* Session.cpp */,
+				1FF1FC951F67347C00D56337 /* Session.hpp */,
 			);
 			path = "canon-video-capture";
 			sourceTree = "<group>";
@@ -149,7 +161,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1FF1FC961F67347C00D56337 /* Session.cpp in Sources */,
 				1FB0BD1E1F4730E7009387AC /* main.cpp in Sources */,
+				1FF1FC931F6733E400D56337 /* Logger.cpp in Sources */,
 				1FB0BD341F474A8B009387AC /* EdsStrings.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
