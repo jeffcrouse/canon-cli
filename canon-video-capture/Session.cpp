@@ -69,7 +69,17 @@ namespace cc {
             EDSDK_CHECK( EdsGetDeviceInfo(_camera, &_info) )
             j[i]["description"] =  _info.szDeviceDescription;
             j[i]["port"] = _info.szPortName;
-            j[i]["reserved"] =_info.reserved;
+            j[i]["reserved"] = _info.reserved;
+            
+            EDSDK_CHECK( EdsOpenSession(_camera) )
+            EdsDataType dataType;
+            EdsUInt32 dataSize;
+            EdsGetPropertySize(_camera, kEdsPropID_BodyIDEx, 0 , &dataType, &dataSize);
+            char buf[dataSize];
+            EDSDK_CHECK( EdsGetPropertyData(_camera, kEdsPropID_BodyIDEx, 0, dataSize, &buf) )
+            j[i]["body"] = std::string(buf);
+            EDSDK_CHECK( EdsCloseSession(_camera) )
+            
             EDSDK_CHECK ( EdsRelease(_camera) )
         }
         return j.dump(4);
