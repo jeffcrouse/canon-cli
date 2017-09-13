@@ -9,12 +9,13 @@
 #pragma once
 
 #define __MACOS__
-#define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { throw Eds::getErrorString(X); }
+#define EDSDK_CHECK(X) if(X!=EDS_ERR_OK) { throw std::runtime_error(Eds::getErrorString(X)); }
 #define EDSDK_MOV_FORMAT 45317
 #define EDSDK_JPG_FORMAT 14337
 
 #include <sys/stat.h>
 #include <vector>
+#include <exception>
 #include "Logger.hpp"
 
 #include "EDSDK.h"
@@ -27,6 +28,13 @@
 namespace cc {
     
     typedef std::vector<std::string> command;
+
+//    class SessionError : public std::runtime_error {
+//    public:
+//        SessionError(std::string _message, bool _critical) : std::runtime_error(_message.c_str()), critical(_critical) {}
+//        bool critical;
+//    };
+    
     
     class Session {
         
@@ -85,6 +93,7 @@ namespace cc {
         EdsInt32 cameraIndex;
         std::string defaultDir;
     };
+    
 
 }
 

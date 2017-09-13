@@ -29,13 +29,26 @@ bool sigint = false;
 
 int main(int argc, char * argv[]) {
     
-    cc::Session* session = cc::Session::getInstance();
+    
     cc::Logger* log = cc::Logger::getInstance();
+    cc::Session* session;
+    try {
+        session = cc::Session::getInstance();
+    } catch(std::runtime_error e) {
+        log->error(e.what());
+        exit(1);
+    }
+    
+    
+    std::cout << "canon-camera-capture" << std::endl << std::endl;
+    
+
     
     //
     //  Parse command line arguments
     //
     try {
+        
         cxxopts::Options options(argv[0], "Command line program to capture video from a tethered Canon camera using EDSDK");
         options.add_options()
             ("d,debug", "Enable debugging", cxxopts::value<bool>())
@@ -51,17 +64,24 @@ int main(int argc, char * argv[]) {
             ;
         
         options.parse(argc, argv);
-        
+ 
         if(options.count("help")) {
             std::cout << options.help() << std::endl;
             exit(0);
         }
         
-        if(options.count("list-devices")) {
-            std::cout << session->getDevicesAsJSON() << std::endl;
+
+        if(options["list-devices"].as<bool>()) {
+            log->status("listing devices");
+            try {
+                std::cout << session->getDevicesAsJSON() << std::endl;
+                delete session;
+            } catch(std::runtime_error e) {
+                 log->error(e.what());
+            }
             exit(0);
         }
-        
+   
         if(options.count("debug")) {
             log->level = LOG_STATUS;
         }
@@ -70,11 +90,22 @@ int main(int argc, char * argv[]) {
             log->level = LOG_VERBOSE;
         }
         
-        session->maxDuration = options["max-duration"].as<int>();
-        session->deleteAfterDownload = options["delete-after-download"].as<bool>();;
-        session->defaultDir = options["default-dir"].as<std::string>();
+        
         session->cameraIndex = options["id"].as<EdsInt32>();
+        session->maxDuration = options["max-duration"].as<int>();
+        session->deleteAfterDownload = options["delete-after-download"].as<bool>();
+        session->defaultDir = options["default-dir"].as<std::string>();
         session->saveToHost = options["save-to-host"].as<bool>();
+        session->overwrite = options["overwrite"].as<bool>();
+        
+        
+        std::cout  << "id: " << session->cameraIndex << std::endl;
+        std::cout  << "delete-after-download: " << (session->deleteAfterDownload ? "yes" : "no") << std::endl;
+        std::cout  << "default-dir: " << session->defaultDir << std::endl;
+        std::cout  << "save-to-host: " << (session->saveToHost?"yes":"no") << std::endl;
+        std::cout  << "max-duration: " << session->maxDuration << std::endl;
+        std::cout  << "overwrite: " << (session->overwrite ? "yes" : "no") << std::endl;
+        
         
     } catch (const cxxopts::OptionException& e) {
         log->error(e.what());
@@ -82,8 +113,7 @@ int main(int argc, char * argv[]) {
     }
     
     
-    
-    
+
     
     //
     // Set the signal handler so we can tell when to shut down gracefully
@@ -143,8 +173,9 @@ int main(int argc, char * argv[]) {
         
         try {
             session->process();
-        } catch(std::string s) {
-            log->error(s);
+        } catch(std::runtime_error e) {
+            log->error(e.what());
+            exit(1);
         }
         
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -161,8 +192,8 @@ int main(int argc, char * argv[]) {
     
     try {
         delete session;
-    } catch(std::string s) {
-         log->error(s);
+    } catch(std::runtime_error e) {
+         log->error(e.what());
     }
     
     log->status("done");

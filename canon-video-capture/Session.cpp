@@ -28,7 +28,6 @@ namespace cc {
         cc::Logger::getInstance()->status("initializing SDK");
         EDSDK_CHECK( EdsInitializeSDK() );
         sdkInitialized = true;
-
         
         start = std::chrono::high_resolution_clock::now();
     }
@@ -152,7 +151,7 @@ namespace cc {
 
     // ----------------------------------------------------------------------
     void Session::process() {
-
+        
         if(!sessionOpen) {
             open();
         }
@@ -221,7 +220,7 @@ namespace cc {
         auto elapsed = now - start;
         long seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         if(seconds > 60) {
-            //print_status("sending keep alive");
+            Logger::getInstance()->status("sending keep alive");
             EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
             start = std::chrono::high_resolution_clock::now();
         }
@@ -244,16 +243,22 @@ namespace cc {
         
         updateCameraList();
         
-        if(cameraIndex < 0) {
-            throw std::string("invalid camera ID");
-        }
+        if(cameraCount==0)
+            throw std::runtime_error("no cameras connected.");
         
-        if(cameraIndex >= cameraCount) {
-            cc::Logger::getInstance()->warning("invalid camera ID. waiting for camera to reattach");
-            return;
-        }
+        if(cameraIndex < 0)
+            throw std::runtime_error("invalid camera ID");
+        
+        if(cameraIndex >= cameraCount)
+            throw std::runtime_error("invalid camera ID");
+ 
+        
+        std::stringstream msg;
+        msg << "fetching camera " << cameraIndex;
+        cc::Logger::getInstance()->status(msg.str());
         
         EDSDK_CHECK( EdsGetChildAtIndex(cameraList, cameraIndex, &camera) )
+        
         EDSDK_CHECK( EdsSetObjectEventHandler(camera, kEdsObjectEvent_All, [](EdsObjectEvent event, EdsBaseRef object, EdsVoid* context) -> EdsError EDSCALLBACK {
             return reinterpret_cast<Session*>(context)->handleEvent(event, object);
         }, this) )
