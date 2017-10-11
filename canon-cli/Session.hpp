@@ -90,6 +90,7 @@ namespace cc {
         bool deleteAfterDownload;
         bool saveToHost;
         bool overwrite;
+        bool canceled = false;
         EdsInt32 cameraIndex;
         std::string defaultDir;
     };

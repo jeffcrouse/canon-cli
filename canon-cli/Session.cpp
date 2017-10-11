@@ -210,6 +210,17 @@ namespace cc {
                 }
             }
             
+            else if(cmd[0].compare("cancel")==0) {
+                if(!isRecording()) {
+                    Logger::getInstance()->warning("not recording");
+                } else {
+                    Logger::getInstance()->status("canceling");
+                    canceled = true;
+                    EdsUInt32 record_stop = 0; // End movie shooting
+                    EDSDK_CHECK( EdsSetPropertyData(camera, kEdsPropID_Record, 0, sizeof(record_stop), &record_stop) )
+                }
+            }
+            
             else {
                 Logger::getInstance()->warning("unknown command: "+cmd[0]);
             }
@@ -318,7 +329,12 @@ namespace cc {
         if(!object)
             return EDS_ERR_OK;
         if(event == kEdsObjectEvent_DirItemCreated) {
-            return download(object);
+            if(canceled) {
+                EDSDK_CHECK( EdsDeleteDirectoryItem(object) )
+                canceled = false;
+            } else {
+                return download(object);
+            }
         } else if(event == kEdsObjectEvent_DirItemRemoved) {
             cc::Logger::getInstance()->status("item removed");
         } else {
