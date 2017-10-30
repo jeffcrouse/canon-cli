@@ -31,7 +31,6 @@ namespace cc {
         
         start = std::chrono::high_resolution_clock::now();
         next_keepalive = start + std::chrono::seconds(60);
-        //next_status = start + std::chrono::seconds(1);
     }
 
     // ----------------------------------------------------------------------
@@ -223,6 +222,17 @@ namespace cc {
                 }
             }
             
+            else if(cmd[0].compare("state")==0) {
+                if(isRecording()) {
+                    Logger::getInstance()->status("state recording");
+                } else if(sessionOpen) {
+                    Logger::getInstance()->status("state open");
+                } else {
+                    Logger::getInstance()->status("state closed");
+                }
+
+            }
+            
             else {
                 Logger::getInstance()->warning("unknown command: "+cmd[0]);
             }
@@ -238,17 +248,6 @@ namespace cc {
             EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
             next_keepalive = now + std::chrono::seconds(60);
         }
-        
-//        if( now > next_status) {
-//            if(isRecording()) {
-//                Logger::getInstance()->status("state recording");
-//            } else if(sessionOpen) {
-//                Logger::getInstance()->status("state open");
-//            } else {
-//                Logger::getInstance()->status("state closed");
-//            }
-//            next_status = now + std::chrono::milliseconds(100);
-//        }
     }
 
     

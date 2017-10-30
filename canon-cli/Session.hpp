@@ -51,7 +51,6 @@ namespace cc {
         
         time_point start;
         time_point next_keepalive;
-        //time_point next_status;
         
     public:
         
