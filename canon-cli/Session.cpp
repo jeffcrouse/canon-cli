@@ -30,6 +30,8 @@ namespace cc {
         sdkInitialized = true;
         
         start = std::chrono::high_resolution_clock::now();
+        next_keepalive = start + std::chrono::seconds(60);
+        //next_status = start + std::chrono::seconds(1);
     }
 
     // ----------------------------------------------------------------------
@@ -227,14 +229,26 @@ namespace cc {
         }
         
         
-        auto now = std::chrono::high_resolution_clock::now();
-        auto elapsed = now - start;
-        long seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-        if(seconds > 60) {
+        time_point now = high_resolution_clock::now();
+        //auto elapsed = now - start;
+        //long secs = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        
+        if( now > next_keepalive) {
             Logger::getInstance()->status("sending keep alive");
             EdsSendStatusCommand(camera, kEdsCameraCommand_ExtendShutDownTimer, 0);
-            start = std::chrono::high_resolution_clock::now();
+            next_keepalive = now + std::chrono::seconds(60);
         }
+        
+//        if( now > next_status) {
+//            if(isRecording()) {
+//                Logger::getInstance()->status("state recording");
+//            } else if(sessionOpen) {
+//                Logger::getInstance()->status("state open");
+//            } else {
+//                Logger::getInstance()->status("state closed");
+//            }
+//            next_status = now + std::chrono::milliseconds(100);
+//        }
     }
 
     

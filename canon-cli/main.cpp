@@ -112,7 +112,7 @@ int main(int argc, char * argv[]) {
         exit(1);
     }
     
-    
+    log->status("opening");
 
     
     //
@@ -196,6 +196,6 @@ int main(int argc, char * argv[]) {
          log->error(e.what());
     }
     
-    log->status("done");
+    log->status("exiting");
     return 0;
 }

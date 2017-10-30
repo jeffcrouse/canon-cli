@@ -28,13 +28,11 @@
 namespace cc {
     
     typedef std::vector<std::string> command;
-
-//    class SessionError : public std::runtime_error {
-//    public:
-//        SessionError(std::string _message, bool _critical) : std::runtime_error(_message.c_str()), critical(_critical) {}
-//        bool critical;
-//    };
     
+    typedef std::chrono::high_resolution_clock::time_point time_point;
+    typedef std::chrono::high_resolution_clock high_resolution_clock;
+    typedef std::chrono::milliseconds milliseconds;
+
     
     class Session {
         
@@ -47,10 +45,13 @@ namespace cc {
         EdsCameraRef camera = NULL;
         bool sessionOpen = false;
         std::string outfile;
-        std::chrono::high_resolution_clock::time_point start;
         std::vector<command> command_queue;
         std::mutex command_queue_mutex;
         
+        
+        time_point start;
+        time_point next_keepalive;
+        //time_point next_status;
         
     public:
         
