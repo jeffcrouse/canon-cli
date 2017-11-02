@@ -115,14 +115,7 @@ int main(int argc, char * argv[]) {
     log->status("opening");
 
     
-    //
-    // Set the signal handler so we can tell when to shut down gracefully
-    //
-    signal(SIGINT, [](int signum) {
-        std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
-        sigint = true;
-    });
-   
+
     
     
     
@@ -182,6 +175,15 @@ int main(int argc, char * argv[]) {
     }
 
 
+    //
+    // Set the signal handler so we can tell when to shut down gracefully
+    //
+    signal(SIGINT, [](int signum) {
+        std::cout << "Interrupt signal (" << signum << ") received." << std::endl;
+        sigint = true;
+    });
+    
+    
     
     //
     //  Terminate SDK

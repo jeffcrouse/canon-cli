@@ -387,6 +387,7 @@ namespace cc {
             EDSDK_CHECK( EdsCloseSession(camera) )
             sessionOpen = false;
             downloading = false;
+            exit(0);
         }
         else {
             cc::Logger::getInstance()->warning("unknown state");
