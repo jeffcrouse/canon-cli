@@ -185,7 +185,11 @@ namespace cc {
                 } else {
                     
                     if(cmd.size() > 1) {
-                        outfile = cmd[1];
+                        std::stringstream ss;
+                        ss << defaultDir << "/" << cmd[1];
+                        outfile = ss.str();
+                        
+                        
                         if(!overwrite && fileExists(outfile)) {
                             Logger::getInstance()->warning(outfile + " already exists. using defualt name instead");
                             outfile = "";

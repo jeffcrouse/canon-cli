@@ -11,9 +11,9 @@
 		1F25AFB61F79EA6F00E7DF21 /* Logger.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1F25AFAF1F79EA6F00E7DF21 /* Logger.cpp */; };
 		1F25AFB71F79EA6F00E7DF21 /* EdsStrings.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1F25AFB01F79EA6F00E7DF21 /* EdsStrings.cpp */; };
 		1F25AFB81F79EA6F00E7DF21 /* Session.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1F25AFB41F79EA6F00E7DF21 /* Session.cpp */; };
-		1F25AFBC1F79EA7D00E7DF21 /* DPP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F25AFBA1F79EA7D00E7DF21 /* DPP.framework */; };
-		1F25AFBD1F79EA7D00E7DF21 /* EDSDK.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F25AFBB1F79EA7D00E7DF21 /* EDSDK.framework */; };
 		1F25AFBF1F79EA8600E7DF21 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F25AFBE1F79EA8600E7DF21 /* CoreFoundation.framework */; };
+		1FB4E12D20D8467E00D3C293 /* DPP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB4E12B20D8467E00D3C293 /* DPP.framework */; };
+		1FB4E12E20D8467E00D3C293 /* EDSDK.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1FB4E12C20D8467E00D3C293 /* EDSDK.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -39,10 +39,13 @@
 		1F25AFB31F79EA6F00E7DF21 /* Logger.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Logger.hpp; sourceTree = "<group>"; };
 		1F25AFB41F79EA6F00E7DF21 /* Session.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Session.cpp; sourceTree = "<group>"; };
 		1F25AFB51F79EA6F00E7DF21 /* json.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = json.hpp; sourceTree = "<group>"; };
-		1F25AFBA1F79EA7D00E7DF21 /* DPP.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DPP.framework; path = EDSDK/Framework/DPP.framework; sourceTree = "<group>"; };
-		1F25AFBB1F79EA7D00E7DF21 /* EDSDK.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EDSDK.framework; path = EDSDK/Framework/EDSDK.framework; sourceTree = "<group>"; };
 		1F25AFBE1F79EA8600E7DF21 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		1F25AFC01F79EAFE00E7DF21 /* config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = config.xcconfig; sourceTree = "<group>"; };
+		1FB4E12820D8466000D3C293 /* EDSDK.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EDSDK.h; sourceTree = "<group>"; };
+		1FB4E12920D8466000D3C293 /* EDSDKTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EDSDKTypes.h; sourceTree = "<group>"; };
+		1FB4E12A20D8466000D3C293 /* EDSDKErrors.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EDSDKErrors.h; sourceTree = "<group>"; };
+		1FB4E12B20D8467E00D3C293 /* DPP.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = DPP.framework; sourceTree = "<group>"; };
+		1FB4E12C20D8467E00D3C293 /* EDSDK.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = EDSDK.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,8 +54,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1F25AFBF1F79EA8600E7DF21 /* CoreFoundation.framework in Frameworks */,
-				1F25AFBC1F79EA7D00E7DF21 /* DPP.framework in Frameworks */,
-				1F25AFBD1F79EA7D00E7DF21 /* EDSDK.framework in Frameworks */,
+				1FB4E12E20D8467E00D3C293 /* EDSDK.framework in Frameworks */,
+				1FB4E12D20D8467E00D3C293 /* DPP.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -89,6 +92,7 @@
 				1F25AFB31F79EA6F00E7DF21 /* Logger.hpp */,
 				1F25AFB41F79EA6F00E7DF21 /* Session.cpp */,
 				1F25AFB11F79EA6F00E7DF21 /* Session.hpp */,
+				1FB4E12320D8466000D3C293 /* EDSDK */,
 			);
 			path = "canon-cli";
 			sourceTree = "<group>";
@@ -97,10 +101,36 @@
 			isa = PBXGroup;
 			children = (
 				1F25AFBE1F79EA8600E7DF21 /* CoreFoundation.framework */,
-				1F25AFBA1F79EA7D00E7DF21 /* DPP.framework */,
-				1F25AFBB1F79EA7D00E7DF21 /* EDSDK.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		1FB4E12320D8466000D3C293 /* EDSDK */ = {
+			isa = PBXGroup;
+			children = (
+				1FB4E12420D8466000D3C293 /* Framework */,
+				1FB4E12720D8466000D3C293 /* Header */,
+			);
+			path = EDSDK;
+			sourceTree = SOURCE_ROOT;
+		};
+		1FB4E12420D8466000D3C293 /* Framework */ = {
+			isa = PBXGroup;
+			children = (
+				1FB4E12B20D8467E00D3C293 /* DPP.framework */,
+				1FB4E12C20D8467E00D3C293 /* EDSDK.framework */,
+			);
+			path = Framework;
+			sourceTree = "<group>";
+		};
+		1FB4E12720D8466000D3C293 /* Header */ = {
+			isa = PBXGroup;
+			children = (
+				1FB4E12820D8466000D3C293 /* EDSDK.h */,
+				1FB4E12920D8466000D3C293 /* EDSDKTypes.h */,
+				1FB4E12A20D8466000D3C293 /* EDSDKErrors.h */,
+			);
+			path = Header;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -283,6 +313,8 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/EDSDK/Framework",
+					"$(LOCAL_LIBRARY_DIR)/Frameworks",
+					"$(PROJECT_DIR)/libs",
 				);
 				HEADER_SEARCH_PATHS = "\"$(SRCROOT)/EDSDK/Header\"";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -297,6 +329,8 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/EDSDK/Framework",
+					"$(LOCAL_LIBRARY_DIR)/Frameworks",
+					"$(PROJECT_DIR)/libs",
 				);
 				HEADER_SEARCH_PATHS = "\"$(SRCROOT)/EDSDK/Header\"";
 				PRODUCT_NAME = "$(TARGET_NAME)";
