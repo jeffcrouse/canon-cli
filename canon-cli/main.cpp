@@ -58,7 +58,7 @@ int main(int argc, char * argv[]) {
             ("o,overwrite", "Overwrite existing files", cxxopts::value<bool>())
             ("l,list-devices", "List Devices", cxxopts::value<bool>())
             ("x,delete-after-download", "Delete files after download", cxxopts::value<bool>())
-            ("r,default-dir", "Default directory to save to if no path is given", cxxopts::value<std::string>()->default_value(".")->implicit_value("."))
+            ("r,default-dir", "Default directory to save to if no path is given", cxxopts::value<std::string>())
             ("m,max-duration", "Maxium duration for video recording (in milliseconds)", cxxopts::value<int>()->default_value("-1")->implicit_value("-1"))
             ("help", "Print help")
             ;

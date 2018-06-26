@@ -98,6 +98,7 @@ namespace cc {
         ss << "file size " << (directoryItemInfo.size / 1000000.0) << " mb";
         cc::Logger::getInstance()->status(ss.str());
         
+        // Make a default output name if one wasn't provided in the "stop" command
         if(outfile.empty()) {
             time_t epoch_time = std::time(0);
             
@@ -114,9 +115,9 @@ namespace cc {
                 cc::Logger::getInstance()->warning("unknown file type");
             }
             outfile = ss.str();
-            
-            cc::Logger::getInstance()->status("downloading "+outfile);
         }
+        
+        cc::Logger::getInstance()->status("downloading "+outfile);
         
         EdsStreamRef outStream;
         EDSDK_CHECK( EdsCreateFileStream(outfile.c_str(), kEdsFileCreateDisposition_CreateAlways, kEdsAccess_ReadWrite, &outStream) )
@@ -185,11 +186,15 @@ namespace cc {
                 } else {
                     
                     if(cmd.size() > 1) {
-                        std::stringstream ss;
-                        ss << defaultDir << "/" << cmd[1];
-                        outfile = ss.str();
-                        
-                        
+                       
+                        if(defaultDir.empty() || cmd[1].at(0)=='/') {
+                            outfile = cmd[1];
+                        } else {
+                            std::stringstream ss;
+                            ss << defaultDir << "/" << cmd[1];
+                            outfile = ss.str();
+                        }
+                       
                         if(!overwrite && fileExists(outfile)) {
                             Logger::getInstance()->warning(outfile + " already exists. using defualt name instead");
                             outfile = "";
