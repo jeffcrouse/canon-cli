@@ -36,14 +36,14 @@ namespace cc {
     // ----------------------------------------------------------------------
     Session::~Session() {
         Logger::getInstance()->status("ending session");
-        if(sessionOpen) EDSDK_CHECK( EdsCloseSession(camera) )
+        if(sessionOpen)  EdsCloseSession(camera);
         sessionOpen = false;
         
        // Logger::getInstance()->status("releasing camera list");
        // if(cameraList) EDSDK_CHECK( EdsRelease(cameraList) )
         
         Logger::getInstance()->status("terminating SDK");
-        if(sdkInitialized) EDSDK_CHECK( EdsTerminateSDK() )
+        if(sdkInitialized) EdsTerminateSDK();
         sdkInitialized = false;
     }
     
@@ -308,6 +308,16 @@ namespace cc {
         sessionOpen = true;
         cc::Logger::getInstance()->status("opened session with "+getSerial());
         
+    
+
+        // WTF: You need to start Live View to record a video?
+        EdsUInt32 device;
+        EdsGetPropertyData(camera, kEdsPropID_Evf_OutputDevice, 0, sizeof(device), &device);
+        device |= kEdsEvfOutputDevice_PC;
+        EdsSetPropertyData(camera, kEdsPropID_Evf_OutputDevice, 0, sizeof(device), &device);
+
+        
+    
         
         if(saveToHost) {
             cc::Logger::getInstance()->status("kEdsSaveTo_Host");
